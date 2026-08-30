@@ -427,3 +427,60 @@ flowchart TB
   Types -.->|imported by| Browser
   Types -.->|imported by| Server
 ```
+
+---
+
+## 7. State Diagram: Lifecycle of a Schedule Run
+
+A `ScheduleRun` row is the system's unit of work. Its states are persisted, so a run's
+outcome — including the reason an infeasible dataset was rejected — survives a page reload
+or a server restart.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Draft: Administrator opens Generate screen
+  Draft --> Validating: Submit parameters
+  Validating --> Infeasible: analyseFeasibility() fails (NFR4)
+  Infeasible --> [*]: Reasons reported, no search run
+  Validating --> Running: Necessary conditions hold
+  Running --> Running: Generation completed<br/>(progress streamed over SSE)
+  Running --> ConflictFree: Zero hard violations reached
+  ConflictFree --> ConflictFree: Soft polishing continues
+  ConflictFree --> Completed: Soft score stops improving
+  Running --> Exhausted: Generation ceiling reached<br/>with violations remaining
+  Running --> Failed: Server or database error
+  Completed --> [*]: Assignments persisted, exportable
+  Exhausted --> [*]: Best-effort result retained for analysis
+  Failed --> [*]
+```
+
+---
+
+## 8. Object Diagram: A Snapshot During Generation
+
+One instant of a benchmark run — generation 13, the moment the first conflict-free
+chromosome appears. It shows concrete instances rather than classes, which is what makes
+the encoding of §4.3 of the report tangible: gene 47 holds only the three free variables,
+while the course, batch and session type are read from requirement 47.
+
+```mermaid
+flowchart TB
+  ctx["ctx : ProblemContext<br/>requirements = 204<br/>periods = 228<br/>meetingTimes = 36"]
+  req["req47 : SessionRequirement<br/>courseId = CSC318<br/>batchId = BSCCSIT-5A<br/>sessionType = LAB<br/>duration = 2"]
+  ind["best : Individual<br/>fitness = 0.030864<br/>hardViolations = 0<br/>softViolations = 144"]
+  chrom["chromosome : Gene[204]"]
+  gene["gene47 : Gene<br/>instructorId = INS-07<br/>roomId = LAB-02<br/>startSlot = 21"]
+  ins["ins07 : Instructor<br/>name = R. Shrestha<br/>expertise = {CSC318, CSC322}"]
+  room["lab02 : Room<br/>capacity = 60<br/>type = LABORATORY"]
+  mt["mt21 : MeetingTime<br/>day = WED<br/>period = 3"]
+  run["run : ScheduleRun<br/>status = RUNNING<br/>seed = 89<br/>generation = 13"]
+
+  ctx --> req
+  run --> ind
+  ind --> chrom
+  chrom -->|"index 47"| gene
+  gene -.->|"describes"| req
+  gene --> ins
+  gene --> room
+  gene --> mt
+```
