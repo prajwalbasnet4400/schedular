@@ -5,9 +5,9 @@
  * made by tournament selection, crossover, mutation and repair.
  *
  * The loop stops when fitness reaches 1.0, after 1000 generations, or once the timetable
- * is clash-free and the soft score has stopped improving for 20 generations. The last rule
- * is needed because a real timetable always has a few soft penalties (a teacher with one
- * idle hour), so fitness almost never reaches exactly 1.0.
+ * is clash-free and the soft score has stopped improving for 20 generations. The sample
+ * data reaches 1.0; the last rule is a fallback for bigger data, where a few soft penalties
+ * (a teacher with one idle hour) can be unavoidable and 1.0 is out of reach.
  */
 import { evaluate } from './fitness';
 import { clone, randomChromosome } from './population';
@@ -18,19 +18,22 @@ import { tournament, type Individual } from './selection';
 import { crossover } from './crossover';
 import { mutate } from './mutation';
 
-/** The parameters from the proposal. */
+/** The parameters from the proposal. The UI lets you edit a copy of these. */
 export const CONFIG = {
-  populationSize: 100,
-  maxGenerations: 1000,
-  crossoverRate: 0.8,
-  mutationRate: 0.05,
-  tournamentSize: 5,
-  elitismRate: 0.2,
+  populationSize: 100, // Step 2: timetables per generation
+  maxGenerations: 1000, // Step 7: hard upper limit
+  crossoverRate: 0.8, // Step 5: share of children made by crossover
+  mutationRate: 0.05, // Step 6: chance per gene
+  tournamentSize: 5, // Step 4: k
+  elitismRate: 0.2, // Step 5: top 20% kept unchanged
   /** Generations without improvement before stopping, once clash-free. */
   patience: 20,
   seed: 42,
 };
 
+export type Config = typeof CONFIG;
+
+/** One point on the live chart, reported after every generation. */
 export interface Progress {
   generation: number;
   bestFitness: number;
@@ -39,7 +42,9 @@ export interface Progress {
   elapsedMs: number;
 }
 
+/** What the run produced. */
 export interface Result {
+  /** The best timetable found. */
   best: Chromosome;
   fitness: number;
   hardViolations: number;
@@ -53,31 +58,32 @@ export interface Result {
 export async function runGA(
   problem: Problem,
   onProgress: (p: Progress) => void = () => {},
-  seed = CONFIG.seed,
+  config: Config = CONFIG,
 ): Promise<Result> {
-  const rng = new Rng(seed);
+  const rng = new Rng(config.seed); // same seed -> same run, every time
   const started = performance.now();
-  const eliteCount = Math.round(CONFIG.populationSize * CONFIG.elitismRate);
+  const eliteCount = Math.round(config.populationSize * config.elitismRate); // 20% of 100 = 20
 
+  // Score a timetable and keep the score next to it.
   const toIndividual = (chromosome: Chromosome): Individual => {
     const e = evaluate(problem, chromosome);
     return { chromosome, fitness: e.fitness, hardViolations: e.hardViolations };
   };
 
-  // Step 2
-  let population = Array.from({ length: CONFIG.populationSize }, () =>
+  // Step 2: start with 100 random timetables.
+  let population = Array.from({ length: config.populationSize }, () =>
     toIndividual(randomChromosome(problem, rng)),
   );
 
-  let bestFitness = 0;
-  let sinceImproved = 0;
-  let solvedAt = -1;
+  let bestFitness = 0; // best fitness seen so far
+  let sinceImproved = 0; // generations since bestFitness last went up
+  let solvedAt = -1; // first generation with zero clashes
   let generation = 0;
 
-  while (generation < CONFIG.maxGenerations) {
+  while (generation < config.maxGenerations) {
     generation++;
 
-    // Step 3: rank by fitness
+    // Step 3: every individual is already scored; sort best first.
     population.sort((a, b) => b.fitness - a.fitness);
     const best = population[0];
 
@@ -89,6 +95,7 @@ export async function runGA(
     }
     if (best.hardViolations === 0 && solvedAt === -1) solvedAt = generation;
 
+    // Report this generation to the page, which adds a point to the chart.
     onProgress({
       generation,
       bestFitness: best.fitness,
@@ -97,30 +104,39 @@ export async function runGA(
       elapsedMs: performance.now() - started,
     });
 
-    // Step 7: termination
-    if (best.fitness === 1) break;
-    if (best.hardViolations === 0 && sinceImproved >= CONFIG.patience) break;
+    // Step 7: termination.
+    if (best.fitness === 1) break; // perfect: no clashes, no soft penalties
+    if (best.hardViolations === 0 && sinceImproved >= config.patience) break; // good enough
+    // (The while condition above stops the loop at maxGenerations.)
 
-    // Next generation: elites first, then children
+    // Build the next generation. Elitism: the top 20% go through unchanged, so the best
+    // timetable found so far can never be lost.
     const next = population.slice(0, eliteCount);
-    while (next.length < CONFIG.populationSize) {
-      const child = rng.chance(CONFIG.crossoverRate)
+
+    // Fill the other 80% with children.
+    while (next.length < config.populationSize) {
+      // Step 4 + 5: with probability 0.8, pick two parents by tournament and cross them;
+      // otherwise copy one tournament winner.
+      const child = rng.chance(config.crossoverRate)
         ? crossover(
-            tournament(population, CONFIG.tournamentSize, rng).chromosome,
-            tournament(population, CONFIG.tournamentSize, rng).chromosome,
+            tournament(population, config.tournamentSize, rng).chromosome,
+            tournament(population, config.tournamentSize, rng).chromosome,
             rng,
-          ) // Step 5
-        : clone(tournament(population, CONFIG.tournamentSize, rng).chromosome); // Step 4
-      mutate(child, problem, CONFIG.mutationRate, rng); // Step 6
-      const e = repair(child, problem, rng);
+          )
+        : clone(tournament(population, config.tournamentSize, rng).chromosome);
+
+      mutate(child, problem, config.mutationRate, rng); // Step 6: small random changes
+      const e = repair(child, problem, rng); // our addition: fix clashing genes if possible
       next.push({ chromosome: child, fitness: e.fitness, hardViolations: e.hardViolations });
     }
     population = next;
 
-    // Let the browser redraw the chart between generations.
+    // Pause for a moment so the browser can redraw the chart. Without this the page would
+    // freeze until the whole run finished and the chart would appear all at once.
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  // The run is over: return the best timetable of the final generation.
   population.sort((a, b) => b.fitness - a.fitness);
   const final = evaluate(problem, population[0].chromosome);
   return {

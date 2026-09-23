@@ -1,3 +1,11 @@
+/**
+ * Tests for the algorithm (run with `npm test`):
+ *   encoding  -- sessions are expanded correctly, and bad data is rejected
+ *   fitness   -- a clash-free timetable scores 0 clashes; each kind of clash is caught
+ *   operators -- crossover and mutation always produce a complete, valid timetable
+ *   GA        -- on the sample data it finds a clash-free timetable within the proposal's
+ *                limits (500 generations, 120 seconds)
+ */
 import { describe, expect, it } from 'vitest';
 import { COLLEGE } from '../data';
 import { crossover } from './crossover';
@@ -23,7 +31,17 @@ const tiny: Problem = buildProblem({
 
 describe('encoding', () => {
   it('makes one session per weekly lecture', () => {
-    expect(problem.sessions).toHaveLength(12 * 5 * 3);
+    expect(problem.sessions).toHaveLength(4 * 4 * 3);
+  });
+
+  it('rejects a batch or teacher that lists an unknown course', () => {
+    const data = { ...COLLEGE, batches: [{ name: 'X', size: 30, courses: ['NOPE'] }] };
+    expect(() => buildProblem(data)).toThrow('X lists unknown course NOPE.');
+  });
+
+  it('rejects a duplicate course code', () => {
+    const data = { ...COLLEGE, courses: [...COLLEGE.courses, COLLEGE.courses[0]] };
+    expect(() => buildProblem(data)).toThrow('is used twice');
   });
 
   it('only offers qualified teachers and rooms that fit', () => {

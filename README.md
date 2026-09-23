@@ -18,14 +18,22 @@ Requires **Node.js 20+**.
 ```bash
 npm install
 npm run dev      # open http://localhost:5173
-npm test         # 8 tests
+npm test         # 10 tests
 ```
 
 ## The problem
 
-6 programmes, 30 courses, 20 teachers, 15 rooms and 12 batches (the NFR1 configuration).
-Every course has 3 lectures a week, so **180 sessions** have to be placed into **36 slots**
-(Sunday–Friday × 6 periods). The data lives in [`src/data.ts`](src/data.ts).
+2 programmes (BCA and B.Sc. CSIT) with 2 sections each, so 4 batches, 8 courses, 5 teachers
+and 3 rooms. Every course has 3 lectures a week, so **48 sessions** have to be placed into
+**36 slots** (Sunday–Friday × 6 periods). The sample data lives in [`src/data.ts`](src/data.ts).
+It is kept small so the demo is quick to explain; the search space is still about 10^95.
+
+Courses, teachers, rooms and batches can be edited on the page under **Edit college data**
+(add, remove, rename; renaming a course code updates every teacher and batch that lists it).
+Impossible data (a duplicate course code, an unknown course, a course nobody can teach, a
+batch no room fits) is reported and disables Generate. Edits are kept only in the page's
+memory: there is no database, so a reload restores the sample data. Departments,
+programmes and time slots cannot be edited.
 
 **Hard constraints** — must all be satisfied:
 - a teacher is never in two places at once
@@ -54,19 +62,31 @@ Every course has 3 lectures a week, so **180 sessions** have to be placed into *
 | `repair.ts` | Our addition: move clashing genes to a better spot if one exists |
 | `rng.ts` | Seeded random numbers, so every run is reproducible |
 
+The parameters (population, rates, tournament size, elitism, seed, …) can be edited on the
+page before each run; they start at the proposal's values.
+
+Every file is commented in plain English (what the step does, why, and a worked example),
+and the page explains each box and the chart as you use it.
+
 No GA or optimisation library is used. The only runtime dependencies are React and Recharts.
 
 ## Results
 
 Across 10 seeds on the data above:
 
-| | Generations to clash-free | Time to clash-free |
-|---|---|---|
-| With repair | 7.1 mean, 8 worst | 384 ms mean, 442 ms worst |
-| Plain GA (Steps 1–7 only) | 378.8 mean, 572 worst; 2/10 miss the 500-generation target | — |
+| | Generations to clash-free | Time to clash-free | Reaches fitness 1.0 |
+|---|---|---|---|
+| With repair | 2.2 mean, 3 worst | 26 ms mean, 38 ms worst | 10/10, after 18–47 generations (138–327 ms) |
+| Plain GA (Steps 1–7 only) | 16.2 mean, 11–22 range | — | 2/10; the rest stop at 0.42–0.77 |
 
 The proposal's budgets were 500 generations and 120 seconds.
 
-Fitness ends near 0.1, not 1.0, because a real timetable always keeps a few soft penalties
-(a teacher with one free hour). Zero hard violations is the goal; the run stops once it has
-that and the soft score has stopped improving for 20 generations.
+With repair, every run reaches fitness exactly 1.0 (zero hard and zero soft penalty), so the
+loop stops on the proposal's own "fitness = 1.0" condition. On bigger or tighter data, where
+soft penalties cannot reach zero, a fallback stops the run once it is clash-free and has not
+improved for 20 generations.
+
+NFR1 (6 programmes, 30 courses, 20 teachers, 15 rooms in under 120 s) was measured on the
+earlier, larger sample (180 sessions; still in git history at commit `4a72724`, `src/data.ts`):
+clash-free in 384 ms mean and 442 ms worst over 10 seeds. A dataset that size can be entered
+under **Edit college data**.

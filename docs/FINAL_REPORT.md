@@ -141,9 +141,9 @@ invalidate an assignment made elsewhere. Colleges affiliated with Tribhuvan Univ
 typically construct the schedule by hand over two to three weeks, and the result still
 commonly contains double-bookings that surface only after the semester has begun.
 
-The system schedules a fixed college dataset sized to the proposal's benchmark — six
-programmes, thirty courses, twenty teachers, fifteen rooms and twelve batches, giving 180
-weekly class sessions to place in 36 time slots. Each candidate timetable is encoded as a
+The system schedules a small sample college dataset — two programmes with two sections each,
+eight courses, five teachers, three rooms and four batches, giving 48 weekly class sessions
+to place in 36 time slots. Each candidate timetable is encoded as a
 chromosome with one gene per session, and scored by the fitness function
 *f = 1 / (1 + total penalty)*. Teacher, room and batch clashes carry a penalty of 100 each;
 teacher qualification and room capacity are guaranteed by construction; two small soft
@@ -153,14 +153,17 @@ targeted repair step.
 
 The system is a browser-only application written in React and TypeScript. Pressing a single
 button runs the algorithm, draws its convergence live, and shows the finished timetable by
-batch, teacher or room. The project deliberately narrows the proposal's scope to the algorithm:
-data management, database, login and export were left out.
+batch, teacher or room. Courses, teachers, rooms and batches can be edited in the page, but
+nothing is saved. The project deliberately narrows the proposal's scope to the algorithm:
+the database, login and export were left out.
 
-Over ten seeded runs the system finds a clash-free timetable in a mean of **7.1 generations
-and 384 milliseconds**, against a requirement of 500 generations and 120 seconds. Without the
-repair step the plain genetic algorithm also succeeds, but needs a mean of 379 generations, and
-two of ten runs exceed the 500-generation target. Repair cuts the generations needed by about
-fifty times.
+Over ten seeded runs the system finds a clash-free timetable in a mean of **2.2 generations
+and 26 milliseconds**, and every run goes on to reach **fitness exactly 1.0** within 18–47
+generations, against a requirement of 500 generations and 120 seconds. Without the repair step
+the plain genetic algorithm needs a mean of 16.2 generations to become clash-free, and only two
+of ten runs reach fitness 1.0. Repair cuts the generations needed by about seven times. The
+proposal's larger NFR1 configuration (180 sessions), measured on an earlier version of the
+sample data, became clash-free in 384 ms mean and 442 ms worst.
 
 **Keywords:** Genetic Algorithm, Timetable Scheduling, NP-hard, Constraint Satisfaction,
 Memetic Algorithm, Educational Resource Allocation, TypeScript.
@@ -252,7 +255,8 @@ unreliable.
 
 Timetable scheduling is formally an **NP-hard** combinatorial optimisation problem [1]: no
 known algorithm can guarantee an optimal solution for every instance in polynomial time. The
-dataset used in this project admits on the order of 10^523 candidate timetables, so exhaustive
+small sample dataset used in this project already admits on the order of 10^95 candidate
+timetables, so exhaustive
 enumeration is not merely impractical but physically impossible. A method is required that
 searches this space intelligently rather than completely.
 
@@ -315,18 +319,23 @@ The following fall within the scope of this project:
 
 - Generation of a conflict-free weekly timetable by a Genetic Algorithm written from scratch,
   following the proposal's seven steps, plus one documented repair step.
-- A fixed, realistic dataset sized to the proposal's benchmark: 6 programmes, 30 courses,
-  20 teachers, 15 rooms, 12 batches, 180 sessions, 36 slots.
+- A small sample dataset, quick to explain in a demonstration: 2 programmes, 8 courses,
+  5 teachers, 3 rooms, 4 batches, 48 sessions, 36 slots. An earlier NFR1-sized version
+  (6 programmes, 30 courses, 20 teachers, 15 rooms, 180 sessions) was used to measure NFR1.
+- In-browser editing of the courses, teachers, rooms and batches, with checks that report
+  impossible data before a run.
 - A live chart of hard violations and best fitness per generation while the search runs.
 - A plain timetable grid of the result, viewable by batch, teacher or room.
-- Eight automated tests of the encoding, the fitness function, the operators and the full run.
+- Ten automated tests of the encoding, the fitness function, the operators and the full run.
 
 ### 1.4.2 Limitation
 
-- **Fixed data.** The dataset is hard-coded in `src/data.ts`; changing it means editing that
-  file.
+- **Unsaved data.** Courses, teachers, rooms and batches can be edited on the page, but the
+  edits live only in memory and a reload restores the sample in `src/data.ts`. Departments,
+  programmes and time slots cannot be edited.
 - **No completeness guarantee.** The algorithm cannot prove that no valid timetable exists. It
-  only reports a plain error if a course has no qualified teacher or a batch fits no room.
+  only reports a plain error for a duplicate course code, a teacher or batch listing an
+  unknown course, a course with no qualified teacher, or a batch that fits no room.
 - **Simplified model.** No laboratories, room types, departments or teacher availability.
 - **Hand-tuned soft weights,** chosen empirically rather than derived.
 - **No persistence, login or export.** A timetable exists only in the open browser tab.
@@ -340,12 +349,12 @@ deviations are stated plainly:
 
 | Proposal item | Status in the delivered system |
 |---|---|
-| FR1 — CRUD screens for institutional data | Not implemented. Data is fixed in `src/data.ts`. |
+| FR1 — CRUD screens for institutional data | Partial. Courses, teachers, rooms and batches can be edited, added and removed in the browser; nothing is saved (no database). No departments, time slots, teacher availability or login. |
 | FR5 — PDF and Excel export | Not implemented. |
 | FR6 — Authentication and role-based access | Not implemented. The application has a single user. |
 | NFR3 — Relational database | Not implemented. Nothing is stored. |
 | FR3 — Grid with department filter and lab colouring | Partial. Plain table filtered by batch, teacher or room; there are no departments or labs. |
-| NFR4 — Meaningful errors for impossible data | Partial. Only the two checks listed in Section 1.4.2. |
+| NFR4 — Meaningful errors for impossible data | Partial. Only the four checks listed in Section 1.4.2. |
 | Step 3 — capacity as a penalised constraint | Changed. Capacity (and qualification) are guaranteed by construction instead of penalised. |
 | Hard constraints | Extended. A batch-clash check is added (Section 4.3.3). |
 | Steps 1–7 | Extended. A targeted repair step is added (Section 4.3.6). |
@@ -522,8 +531,17 @@ requirements form the basis of the design, implementation and testing that follo
 
 The delivered system provides the following capabilities to its single actor, the **User**:
 
+- **Edit college data.** In the collapsible *Edit college data* section the user can edit, add
+  and remove courses (code, name, lectures per week), teachers (name, course codes they can
+  teach), rooms (name, capacity) and batches (name, students, course codes they take).
+  Renaming a course code renames it in every teacher's and batch's list, unless another
+  course already uses that code; removing a course removes its code from those lists.
+  *Reset to sample data* restores the built-in dataset. Edits are held only in the page's
+  memory and are lost on reload.
+- **Set parameters.** The GA parameters (population, rates, tournament size, elitism,
+  patience, seed) can be edited before a run; they default to the proposal's values.
 - **Generate a timetable.** Pressing *Generate timetable* runs the genetic algorithm on the
-  built-in dataset.
+  current data. If the data is impossible, the page shows why and the button is disabled.
 - **Watch progress.** While the search runs, the page shows the generation number, hard
   violations, best fitness and elapsed time, and a chart of hard violations and best fitness
   per generation.
@@ -536,7 +554,7 @@ Table 3.1 records each functional requirement from the proposal and its status.
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR1 | Administrator interface for CRUD on departments, teachers, courses, rooms, batches and time slots | **Not implemented** — data is fixed in `src/data.ts` |
+| FR1 | Administrator interface for CRUD on departments, teachers, courses, rooms, batches and time slots | **Partial** — courses, teachers, rooms and batches editable in the browser; not saved, no departments, time slots or availability, no login |
 | FR2 | Genetic Algorithm engine enforcing hard constraints: no teacher double-booking, no room double-booking, no capacity violation | **Implemented** — plus a batch-clash check (§4.3.3) |
 | FR3 | Interactive grid with filtering by teacher, batch, room and department; colour coding for lecture and laboratory sessions | **Partial** — plain table by batch, teacher or room; no departments or labs |
 | FR4 | Real-time feedback during generation showing generation number and fitness score | **Implemented** — stat tiles and live chart |
@@ -548,8 +566,8 @@ Table 3.1 records each functional requirement from the proposal and its status.
 A use case diagram is a behavioural diagram defined by the UML whose purpose is to present a
 graphical overview of the functionality a system provides, in terms of its actors, their goals
 expressed as use cases, and the relationships between them. The system has one actor, the
-User, with three use cases: *Generate timetable*, *Watch progress* (included in generation)
-and *View timetable by batch, teacher or room*.
+User, with five use cases: *Edit college data*, *Set GA parameters*, *Generate timetable*,
+*Watch progress* (included in generation) and *View timetable by batch, teacher or room*.
 
 <div align="center">
 
@@ -569,10 +587,10 @@ security. They constrain how the system achieves its functional requirements.
 
 | ID | Requirement | Status |
 |---|---|---|
-| NFR1 | Conflict-free timetable for 6 programmes / 30 courses / 20 teachers / 15 rooms within 120 seconds | **Met** — 384 ms mean, 442 ms worst (§5.3.1) |
+| NFR1 | Conflict-free timetable for 6 programmes / 30 courses / 20 teachers / 15 rooms within 120 seconds | **Met (measured on the earlier 180-session dataset)** — 384 ms mean, 442 ms worst (§5.3.1) |
 | NFR2 | Responsive interface from 768 px (tablet) to desktop | **Met** — fluid single-column layout; the timetable scrolls horizontally inside its container on narrow screens |
 | NFR3 | Persistence in a relational database | **Not implemented** |
-| NFR4 | Meaningful error messages when input data makes a feasible schedule impossible | **Partial** — a plain error if a course has no qualified teacher or a batch fits no room |
+| NFR4 | Meaningful error messages when input data makes a feasible schedule impossible | **Partial** — a plain error, with Generate disabled, for a duplicate course code, a teacher or batch listing an unknown course, a course with no qualified teacher, or a batch that fits no room |
 
 #### 3.1.1.3 Constraint Specification
 
@@ -686,11 +704,11 @@ Evaluation, Rng and the `runGA` function with its Progress and Result.
 #### 3.1.3.2 Sequence Diagram
 
 A sequence diagram is an interaction diagram that describes how a group of objects collaborate
-and in what order. When the user presses *Generate timetable*, the App component calls
-`runGA`. After each generation `runGA` calls back with a Progress record, which the App appends
+and in what order. Whenever the data changes, the App component calls `buildProblem`; when
+the user presses *Generate timetable*, it calls `runGA` with that problem. After each generation `runGA` calls back with a Progress record, which the App appends
 to its history so the chart and stat tiles re-render; the loop then yields to the browser for
 one tick so the page can redraw. When the loop terminates `runGA` returns a Result, and the App
-hands the best chromosome to the Timetable component.
+hands the best chromosome, with the problem it was solved for, to the Timetable component.
 
 <div align="center">
 
@@ -726,13 +744,14 @@ termination test — with the repair step marked explicitly as an addition.
 The system is a single-page application that runs entirely in the browser. There is no server,
 no database and no network traffic after the page has loaded. It has three parts:
 
-- **Data** — `src/data.ts`, the fixed college dataset: courses, teachers with the courses they
-  can teach, rooms with capacities, and batches with sizes and courses.
+- **Data** — `src/data.ts`, the sample college dataset: courses, teachers with the courses they
+  can teach, rooms with capacities, and batches with sizes and courses. The page starts from
+  it and keeps any edits in memory.
 - **Algorithm** — `src/ga/`, the genetic algorithm, one file per step of the proposal. It is
   pure TypeScript with no dependency on React or the browser, which is what lets the same code
   run in the tests under Node.js.
-- **Interface** — `src/App.tsx` (the button, stat tiles and chart) and `src/Timetable.tsx`
-  (the timetable grid).
+- **Interface** — `src/App.tsx` (the button, stat tiles and chart), `src/DataEditor.tsx`
+  (the data-editing tables) and `src/Timetable.tsx` (the timetable grid).
 
 The algorithm runs on the browser's main thread. To keep the page responsive, the loop yields
 to the browser for one tick after each generation, so the chart redraws while the search runs.
@@ -749,7 +768,8 @@ to the browser for one tick after each generation, so the chart redraws while th
 
 A component diagram depicts the components of a system, their interfaces, dependencies and
 relationships. Here the App component depends on the dataset, on `buildProblem` and on `runGA`,
-and renders the Recharts chart and the Timetable component. `runGA` depends on the population,
+and renders the DataEditor component (which hands edited data back to it), the Recharts chart
+and the Timetable component. `runGA` depends on the population,
 fitness, selection, crossover, mutation, repair and rng modules; nothing in `src/ga/` depends on
 the interface.
 
@@ -763,18 +783,23 @@ the interface.
 
 ## 4.2 Data Design
 
-There is no database. The dataset in `src/data.ts` is sized to the proposal's NFR1
-configuration:
+There is no database. The sample dataset in `src/data.ts` is kept small so the demonstration
+is quick to explain (courses, teachers, rooms and batches can be changed on the page, but not
+saved):
 
 | Item | Count | Notes |
 |---|---:|---|
-| Programmes | 6 | BCA, B.Sc. CSIT, BIM, BBA, BBM, BHM |
-| Courses | 30 | Five per programme, each 3 lectures a week |
-| Teachers | 20 | Each qualified for three courses; qualifications overlap |
-| Rooms | 15 | Capacities 35 to 70 |
-| Batches | 12 | Two sections per programme, 28 to 55 students |
-| Sessions | 180 | 12 batches × 5 courses × 3 lectures |
+| Programmes | 2 | BCA, B.Sc. CSIT |
+| Courses | 8 | Four per programme, each 3 lectures a week |
+| Teachers | 5 | Each qualified for two or three courses; qualifications overlap |
+| Rooms | 3 | A-101 (50), A-102 (45), B-101 (40) |
+| Batches | 4 | Two sections per programme: BCA 5A (48), BCA 5B (44), CSIT 5A (40), CSIT 5B (38) |
+| Sessions | 48 | 4 batches × 4 courses × 3 lectures |
 | Time slots | 36 | Sunday–Friday × six periods, 06:30–12:30 |
+
+An earlier version of this file was sized to the proposal's NFR1 configuration (6 programmes,
+30 courses, 20 teachers, 15 rooms, 12 batches, 180 sessions). It remains in git history at
+commit `4a72724` and is the dataset on which NFR1 was measured (Section 5.3.1).
 
 ## 4.3 Algorithm Details
 
@@ -887,8 +912,8 @@ cannot break qualification or capacity.
 **Time complexity.** One fitness evaluation touches each of the G genes once, plus a fixed scan
 of the teacher and batch grids for the soft penalties, so it is O(G). One generation evaluates
 N chromosomes, and repair evaluates each child at most 12 × 8 = 96 more times, so a generation
-costs O(N · G) with a bounded constant. At N = 100 and G = 180, a generation takes a few tens of
-milliseconds in the browser.
+costs O(N · G) with a bounded constant. At N = 100 and G = 48, a generation takes around ten
+milliseconds in the browser (a few tens at G = 180).
 
 ### 4.3.3 Constraint Addition — Batch Clash
 
@@ -900,33 +925,32 @@ useless, so the batch clash is added as a third hard constraint with the same pe
 ### 4.3.4 Soft Weights Below One Clash
 
 The soft weights (0.3 per idle gap, 0.2 per unit of uneven daily load) are kept small so that
-all soft penalty together stays below the cost of a single clash. A converged timetable carries
-a soft penalty of about 8 to 10, far below 100. This makes the search lexicographic: removing
+all soft penalty together stays below the cost of a single clash. On the sample data a converged
+timetable carries no soft penalty at all, and on larger data it stays far below 100. This makes the search lexicographic: removing
 one clash is always worth more than any amount of soft improvement, so the algorithm fixes
 clashes first and polishes afterwards. With larger soft weights, a move that removed a real
 clash could be rejected because it added a few idle gaps.
 
 ### 4.3.5 Termination (Step 7)
 
-The proposal says the loop runs until a chromosome reaches a fitness of 1.0. Taken literally,
-that almost never happens: the penalty includes the soft constraints, and a realistic timetable
-always keeps a few — a teacher with one idle hour is an ordinary timetable, not a faulty one.
-Final fitness is typically around 0.09 to 0.11.
-
-The proposal's expected outcomes equate "a fitness score of 1.0" with "zero hard constraint
-violations", so zero clashes is taken as the real goal. The loop stops when any of the
+The proposal says the loop runs until a chromosome reaches a fitness of 1.0, that is, zero
+hard and zero soft penalty. On the sample data this condition fires literally: with repair,
+every run reaches fitness 1.0. On bigger or tighter data some soft penalty (a teacher with one
+idle hour) may be impossible to remove, so a fallback is kept. The loop stops when any of the
 following holds:
 
-1. best fitness equals 1.0 (kept for completeness);
+1. best fitness equals 1.0 (the proposal's condition);
 2. the best timetable is clash-free and best fitness has not improved for 20 generations;
 3. 1000 generations have run.
 
-The metric reported in Chapter 5 is therefore the **generation, and time, at which the first
-clash-free timetable appears**, since that is when the user has a usable result.
+Chapter 5 reports the **generation, and time, at which the first clash-free timetable
+appears**, since that is when the user has a usable result, and the generation at which fitness
+reaches 1.0. Rule 2 is the fallback for data where 1.0 cannot be reached.
 
 ### 4.3.6 Targeted Repair — Our Addition
 
-On its own, the plain algorithm reaches a clash-free timetable, but slowly (Section 5.3.3). Once
+On its own, the plain algorithm reaches a clash-free timetable, but more slowly, and it usually
+stalls short of fitness 1.0 (Section 5.3.3). Once
 the population is similar, crossover makes near-copies, and random mutation rarely hits the few
 genes that are actually clashing.
 
@@ -962,28 +986,43 @@ TypeScript with no dependency of any kind.
 
 ### 5.1.2 Implementation of Modules
 
-**Data Module (`src/data.ts`).** Declares the days, periods, courses, teachers, rooms and
-batches. Qualifications overlap on purpose, so most courses have two or three qualified
+**Data Module (`src/data.ts`).** Declares the days, periods, and the sample courses, teachers,
+rooms and batches. Qualifications overlap on purpose, so most courses have two or three qualified
 teachers and the algorithm has a real choice.
 
 **Encoding Module (`src/ga/problem.ts`).** `buildProblem` expands every batch's courses into
 sessions, three per course, and attaches to each session the indices of its qualified teachers
 and of the rooms that can seat its batch. If either list is empty it throws a plain error such
-as *"No teacher can teach CSC313."*
+as *"No teacher can teach CSC313."* It also rejects a course code used twice and a teacher or
+batch that lists an unknown course. The page shows the message and disables Generate.
 
 **Algorithm Module (`src/ga/`).** One file per step, as listed in Table 4.1. `runGA` takes the
 problem, a progress callback and a seed, and returns the best chromosome with its fitness, hard
 violations, soft penalty, total generations, the generation at which it first became
 clash-free, and the elapsed time.
 
+**Data Editor Module (`src/DataEditor.tsx`).** Four tabs — Courses, Teachers, Rooms and
+Batches — each an editable table with *+ Add* and a × button per row. Course lists are typed as
+comma-separated codes. Renaming a course code renames it in every teacher's and batch's list
+(unless another course already has that code), and removing a course removes its code from
+those lists. The editor is disabled during a run.
+
 **Interface Module (`src/App.tsx`, `src/Timetable.tsx`).** The page shows a one-line summary of
-the dataset and a *Generate timetable* button. While a run is in progress it shows four stat
+the dataset, a collapsible *Edit college data* section with a *Reset to sample data* button,
+eight editable GA parameter fields pre-filled with the proposal's values (with a
+*Reset to proposal defaults* button), and a *Generate timetable* button. While a run is in progress it shows four stat
 tiles — generation, hard violations, best fitness and time — above a chart with hard violations
 on the left axis and best fitness on the right. When the run ends it shows a result line
-(*"Clash-free timetable found at generation 7. Stopped after 61 generations with fitness
-0.0877."*) and the timetable: a plain HTML table of six days by six periods, with a selector for
+(*"Clash-free timetable found at generation 2. Stopped after 38 generations with fitness
+1.0000."*) and the timetable: a plain HTML table of six days by six periods, with a selector for
 the view (by batch, by teacher, by room) and a drop-down for the batch, teacher or room to
-show. Each cell lists the course code and the two other resources.
+show. Each cell lists the course code and the two other resources. The timetable uses the data
+it was generated from, even if the data is edited afterwards.
+
+The page is self-explanatory: every parameter field and stat tile carries a one-line help text,
+the chart has a caption explaining the two lines and the fitness formula, and the timetable and
+data editor each have a short explanatory note. The source code is annotated in the same plain
+style: each file in `src/ga/` begins with what its step does and why, with worked examples.
 
 <div align="center">
 
@@ -995,7 +1034,7 @@ show. Each cell lists the course code and the two other resources.
 
 ## 5.2 Testing
 
-Eight automated tests in `src/ga/ga.test.ts` cover the encoding, the fitness function, the
+Ten automated tests in `src/ga/ga.test.ts` cover the encoding, the fitness function, the
 genetic operators and a complete run. They run with `npm test`. Two small datasets are used: the
 real college dataset, and a tiny two-session problem where clashes can be built by hand.
 
@@ -1014,16 +1053,18 @@ real college dataset, and a tiny two-session problem where clashes can be built 
 ### 5.2.2 Test Cases for Unit Testing
 
 **Test the encoding**
-*Test objective:* To verify that the dataset is expanded correctly into sessions and that
-qualification and capacity are built in.
-*Requirements verified:* FR2.
+*Test objective:* To verify that the dataset is expanded correctly into sessions, that
+qualification and capacity are built in, and that invalid course codes are rejected.
+*Requirements verified:* FR2, NFR4.
 
 **Table 5.2: Test for Encoding**
 
 | Test | Action | Expected Result | Result |
 |---|---|---|---|
-| 1 | Build the problem from the college dataset | 12 × 5 × 3 = 180 sessions | Pass |
+| 1 | Build the problem from the college dataset | 4 × 4 × 3 = 48 sessions | Pass |
 | 2 | Inspect every session's teacher and room lists | Every teacher is qualified for the course; every room seats the batch | Pass |
+| 3 | Build the problem with a course code that no course has | Error naming the unknown course | Pass |
+| 4 | Build the problem after two courses are given the same code | Error naming the duplicated code | Pass |
 
 **Test the fitness function**
 *Test objective:* To verify that clashes are counted correctly and that fitness follows the
@@ -1034,9 +1075,9 @@ formula.
 
 | Test | Action | Expected Result | Result |
 |---|---|---|---|
-| 3 | Evaluate two sessions with different teachers and rooms in one slot | 0 hard violations; fitness = 1/(1 + penalty) | Pass |
-| 4 | Evaluate two sessions with the same teacher in one slot | 1 hard violation; penalty ≥ 100; both genes flagged as clashing | Pass |
-| 5 | Evaluate two sessions in the same room in one slot | 1 hard violation | Pass |
+| 5 | Evaluate two sessions with different teachers and rooms in one slot | 0 hard violations; fitness = 1/(1 + penalty) | Pass |
+| 6 | Evaluate two sessions with the same teacher in one slot | 1 hard violation; penalty ≥ 100; both genes flagged as clashing | Pass |
+| 7 | Evaluate two sessions in the same room in one slot | 1 hard violation | Pass |
 
 **Test the genetic operators**
 *Test objective:* To verify that crossover and mutation always produce valid timetables.
@@ -1046,20 +1087,20 @@ formula.
 
 | Test | Action | Expected Result | Result |
 |---|---|---|---|
-| 6 | Cross two random chromosomes | Child has one gene per session, each copied from one of the parents | Pass |
-| 7 | Mutate a chromosome at rate 1.0 | Every room is from the session's list; every slot is in 0–35 | Pass |
+| 8 | Cross two random chromosomes | Child has one gene per session, each copied from one of the parents | Pass |
+| 9 | Mutate a chromosome at rate 1.0 | Every room is from the session's list; every slot is in 0–35 | Pass |
 
 ### 5.2.3 Test Cases for System Testing
 
 **Test the complete algorithm**
 *Test objective:* To verify the proposal's Expected Outcome 2 on the college dataset.
-*Requirements verified:* FR2, NFR1.
+*Requirements verified:* FR2 (NFR1 was measured separately on the earlier 180-session dataset, Section 5.3.1).
 
 **Table 5.5: Test for the Complete Algorithm**
 
 | Test | Action | Expected Result | Result |
 |---|---|---|---|
-| 8 | Run the full algorithm with the default seed | 0 hard violations; first clash-free within 500 generations; under 120 seconds | Pass |
+| 10 | Run the full algorithm with the default seed | 0 hard violations; first clash-free within 500 generations; under 120 seconds | Pass |
 
 The interface was tested by hand: pressing the button shows the chart and tiles updating live,
 the button is disabled during a run, and switching the view and entity drop-downs shows the
@@ -1072,45 +1113,52 @@ of Table 4.2 and seeds 1 to 10 (and 42, the demo default). Every run is seeded, 
 are reproducible on equivalent hardware. Times are wall-clock on the test environment of
 Table 5.1.
 
-### 5.3.1 NFR1 Compliance
+### 5.3.1 Performance and NFR1 Compliance
 
 **Table 5.6: Ten Seeded Runs With Repair**
 
 | Seed | Hard violations, generation 1 | Clash-free at generation | Total generations | Final fitness | Final soft penalty |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 62 | 7 | 141 | 0.1111 | 8.0 |
-| 2 | 58 | 7 | 79 | 0.1010 | 8.9 |
-| 3 | 61 | 7 | 96 | 0.0943 | 9.6 |
-| 4 | 64 | 7 | 160 | 0.1087 | 8.2 |
-| 5 | 62 | 8 | 101 | 0.1020 | 8.8 |
-| 6 | 61 | 7 | 90 | 0.1111 | 8.0 |
-| 7 | 65 | 8 | 105 | 0.0980 | 9.2 |
-| 8 | 65 | 7 | 128 | 0.1064 | 8.4 |
-| 9 | 64 | 7 | 103 | 0.1042 | 8.6 |
-| 10 | 64 | 6 | 74 | 0.1020 | 8.8 |
+| 1 | 10 | 2 | 27 | 1.0000 | 0.0 |
+| 2 | 12 | 2 | 23 | 1.0000 | 0.0 |
+| 3 | 13 | 2 | 47 | 1.0000 | 0.0 |
+| 4 | 12 | 2 | 32 | 1.0000 | 0.0 |
+| 5 | 14 | 3 | 25 | 1.0000 | 0.0 |
+| 6 | 12 | 2 | 22 | 1.0000 | 0.0 |
+| 7 | 13 | 2 | 41 | 1.0000 | 0.0 |
+| 8 | 14 | 2 | 30 | 1.0000 | 0.0 |
+| 9 | 14 | 3 | 18 | 1.0000 | 0.0 |
+| 10 | 10 | 2 | 42 | 1.0000 | 0.0 |
 
 | Metric | Mean | Worst | Budget | Verdict |
 |---|---:|---:|---:|:--|
-| Generations to clash-free | 7.1 | 8 | 500 | **PASS** |
-| Time to clash-free | 384 ms | 442 ms | 120,000 ms | **PASS** |
+| Generations to clash-free | 2.2 | 3 | 500 | **PASS** |
+| Time to clash-free | 26 ms | 38 ms | 120,000 ms | **PASS** |
 | Hard violations at the end | 0 | 0 | 0 | **PASS** (10/10 runs) |
+| Fitness at the end | 1.0 | 1.0 | 1.0 | **PASS** (10/10 runs) |
 
-Every run stopped by the patience rule: clash-free, then 20 generations without improvement.
-A full run, including soft-constraint polishing, took 74 to 160 generations and 3.3 to 6.8 s;
-the user has a usable timetable long before that.
+Every run stopped on the proposal's own condition, fitness = 1.0 (zero hard and zero soft
+penalty), after 18 to 47 generations and 138 to 327 ms in total. The patience rule never fired.
+
+**NFR1.** The sample data above is smaller than the NFR1 configuration, so the default run does
+not demonstrate NFR1 directly. NFR1 was measured on the earlier NFR1-sized sample (6
+programmes, 30 courses, 20 teachers, 15 rooms, 180 sessions; `src/data.ts` at git commit
+`4a72724`): over the same ten seeds it became clash-free in **384 ms mean and 442 ms worst**,
+against a budget of 120 seconds. A dataset of that size can be entered through the *Edit
+college data* section. NFR1 is therefore met, measured on that earlier dataset.
 
 ### 5.3.2 Convergence Behaviour
 
-With the default seed of 42, the best timetable of the first generation has 50 hard violations.
-Repair and selection remove them within a handful of generations: the first clash-free
-timetable appears at **generation 7, after 368 ms**. From then on only soft penalties remain,
-each worth a fraction of a penalty unit, so best fitness climbs slowly as idle gaps and uneven
-days are reduced. The run stops at generation 61, about 2.7 s, after 20 generations without
-improvement, with a final fitness of 0.0877.
+With the default seed of 42, the best timetable of the first generation has 12 hard violations.
+Repair and selection remove them almost at once: the first clash-free timetable appears at
+**generation 2, after about 28 ms**. From then on only soft penalties remain, each worth a
+fraction of a penalty unit, so best fitness climbs as idle gaps and uneven days are removed.
+At generation 38, after about 0.3–0.4 s, best fitness reaches **1.0000** and the run stops.
 
 The shape is typical of a genetic algorithm on a constrained problem. The hard-violation line
 falls steeply to zero, and at that moment best fitness jumps, because removing the last clash
-takes the penalty from over 100 to about 10. After that the fitness line flattens.
+takes the penalty from over 100 to a few units. After that the fitness line climbs more slowly
+until it reaches 1.0.
 
 <div align="center">
 
@@ -1129,37 +1177,39 @@ is, the proposal's Steps 1 to 7 exactly.
 
 | Seed | Hard violations, generation 1 | Clash-free at generation | Total generations | Final fitness | Final soft penalty |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 62 | 286 | 336 | 0.0336 | 28.8 |
-| 2 | 58 | 445 | 465 | 0.0353 | 27.3 |
-| 3 | 61 | 514 | 534 | 0.0303 | 32.0 |
-| 4 | 64 | 308 | 328 | 0.0330 | 29.3 |
-| 5 | 62 | 377 | 397 | 0.0292 | 33.2 |
-| 6 | 61 | 289 | 309 | 0.0279 | 34.8 |
-| 7 | 65 | 572 | 592 | 0.0336 | 28.8 |
-| 8 | 65 | 316 | 336 | 0.0327 | 29.6 |
-| 9 | 64 | 317 | 337 | 0.0322 | 30.1 |
-| 10 | 64 | 364 | 384 | 0.0271 | 35.9 |
+| 1 | 10 | 13 | 84 | 1.0000 | 0.0 |
+| 2 | 12 | 13 | 113 | 0.7692 | 0.3 |
+| 3 | 13 | 17 | 105 | 0.5000 | 1.0 |
+| 4 | 12 | 19 | 103 | 0.4348 | 1.3 |
+| 5 | 14 | 18 | 103 | 0.4348 | 1.3 |
+| 6 | 12 | 22 | 85 | 0.5882 | 0.7 |
+| 7 | 13 | 17 | 120 | 1.0000 | 0.0 |
+| 8 | 14 | 13 | 133 | 0.7143 | 0.4 |
+| 9 | 14 | 19 | 107 | 0.7692 | 0.3 |
+| 10 | 10 | 11 | 84 | 0.4167 | 1.4 |
 
 **Table 5.8: Summary: Effect of the Repair Step**
 
 | Metric | With repair | Without repair |
 |---|---:|---:|
 | Runs reaching a clash-free timetable | 10 / 10 | 10 / 10 |
-| Generations to clash-free (mean) | 7.1 | 378.8 |
-| Generations to clash-free (worst) | 8 | 572 |
-| Runs over the 500-generation target | 0 | 2 |
-| Final soft penalty | 8.0 – 9.6 | 27.3 – 35.9 |
-| Time to first clash-free timetable (mean / worst) | 384 ms / 442 ms | — |
+| Generations to clash-free (mean) | 2.2 | 16.2 |
+| Generations to clash-free (worst) | 3 | 22 |
+| Runs reaching fitness 1.0 | 10 | 2 |
+| Final fitness when 1.0 not reached | — | 0.42 – 0.77 |
+| Final soft penalty | 0 | 0 – 1.4 |
+| Time to first clash-free timetable (mean / worst) | 26 ms / 38 ms | — |
 
-The plain algorithm does work: every run reaches a clash-free timetable. But it needs a mean of
-379 generations, and in two of ten runs it needs more than 500, which breaks the proposal's
-Expected Outcome 2. Its timetables are also worse, with roughly three times the soft penalty,
-because it spends most of its generations removing clashes and has little left for polishing.
+The plain algorithm does work: every run reaches a clash-free timetable, well within the
+500-generation target. But it needs a mean of 16.2 generations, about seven times as many, and
+in eight of ten runs it stalls short of fitness 1.0, stopping on the patience rule with a soft
+penalty of 0.3 to 1.4 left.
 
-Repair cuts the generations needed by about fifty times and is what makes Expected Outcome 2
-hold on every run. The reason is that mutation is blind: at rate 0.05, about nine of the 180
-genes change per child, chosen without regard to which genes are clashing. Repair uses the
-fitness function's list of clashing genes and changes only those.
+Repair cuts the generations needed by about seven times and, on this data, is what lets fitness
+reach a perfect 1.0 on every run. The reason is that mutation is blind: at rate 0.05, about two
+or three of the 48 genes change per child, chosen without regard to which genes are clashing or
+penalised. Repair uses the fitness function's list of clashing genes and changes only those,
+keeping a change only when the total penalty falls.
 
 ### 5.3.4 Achievement Against the Expected Outcomes
 
@@ -1168,10 +1218,10 @@ fitness function's list of clashing genes and changes only those.
 | Expected outcome | Result |
 |---|---|
 | 1. Working application producing conflict-free timetables | **Achieved** for the built-in dataset: 0 clashes in every run; qualification and capacity guaranteed by construction. |
-| 2. Custom GA in TypeScript reaching zero hard violations within 500 generations, well under 120 seconds | **Achieved** with repair: 7.1 generations and 384 ms mean over 10 seeds. Without repair, 2 of 10 runs exceed 500 generations. |
+| 2. Custom GA in TypeScript reaching zero hard violations within 500 generations, well under 120 seconds | **Achieved**, and fitness 1.0 is met literally: with repair every seed reaches fitness 1.0 (seed 42 at generation 38), clash-free in 2.2 generations and 26 ms mean. Without repair, only 2 of 10 runs reach 1.0. |
 | 3. Interactive multi-perspective timetable view with lecture/laboratory differentiation | **Partial.** Batch, teacher and room views; no laboratories to differentiate. |
 | 4. Print-ready PDF and spreadsheet export | **Not achieved** — removed from scope (§1.4.3). |
-| 5. Documented performance analysis | **Achieved.** Section 5.3: convergence chart, ten-seed runs, and the repair comparison. |
+| 5. Documented performance analysis | **Achieved.** Section 5.3: convergence chart, ten-seed runs, the repair comparison, and the NFR1 measurement on the earlier 180-session dataset. |
 | 6. Report with UML diagrams, design, implementation and testing | **Achieved.** This document and [`UML.md`](UML.md). |
 
 ---
@@ -1181,25 +1231,27 @@ fitness function's list of clashing genes and changes only those.
 ## 6.1 Conclusion
 
 This project delivers a genetic algorithm, written from scratch in TypeScript with no
-optimisation library, that builds a clash-free weekly timetable for a college of the size the
-proposal specified in well under a second: a mean of 7.1 generations and 384 ms over ten seeded
-runs, against targets of 500 generations and 120 seconds.
+optimisation library, that builds a clash-free weekly timetable in well under a second. On the
+sample data it is clash-free in a mean of 2.2 generations and 26 ms, and reaches fitness 1.0 in
+every one of ten seeded runs; on the earlier dataset of the size the proposal specified (NFR1),
+it was clash-free in 384 ms mean. The targets were 500 generations and 120 seconds.
 
 The algorithm follows the proposal's seven steps. The places where it departs from them — the
 batch-clash constraint, qualification and capacity enforced by construction, the termination
 rule, and the targeted repair step — are each documented in the code and in this report. The
-team also deliberately narrowed the proposal's scope to the algorithm, leaving out data
-management, the database, login and export; Section 1.4.3 lists these honestly.
+team also deliberately narrowed the proposal's scope to the algorithm, reducing data
+management to unsaved in-browser editing and leaving out the database, login and export; Section 1.4.3 lists these honestly.
 
 The main finding is the one in Section 5.3.3: the textbook genetic algorithm, implemented
-faithfully, does solve this problem, but slowly and not always within the proposal's
-500-generation target. A small, directed repair step, which only moves the genes that are
-actually clashing, makes it about fifty times faster and makes the target hold on every run.
+faithfully, does solve this problem, but more slowly, and it usually stalls short of fitness
+1.0. A small, directed repair step, which only moves the genes that are actually clashing,
+makes it about seven times faster and lets every run reach fitness 1.0.
 
 ## 6.2 Limitations
 
-1. **Fixed dataset.** The data is hard-coded; there is no way to enter a college's own data
-   without editing `src/data.ts`.
+1. **Unsaved data.** Courses, teachers, rooms and batches can be edited on the page, but the
+   edits are lost on reload; departments, programmes and time slots can only be changed in
+   `src/data.ts`.
 2. **No persistence, login or export.** The timetable disappears when the tab is closed.
 3. **Simplified model.** No laboratories, room types, departments or teacher availability.
 4. **No completeness guarantee.** The algorithm cannot prove that no timetable exists.
@@ -1209,8 +1261,8 @@ actually clashing, makes it about fifty times faster and makes the target hold o
 
 ## 6.3 Future Recommendations
 
-**Data entry and export.** Restore the proposal's FR1 and FR5: screens to enter a college's own
-data, and PDF/Excel export of the result.
+**Saved data entry and export.** Complete the proposal's FR1 and FR5: a database so edited
+data is kept, editing of departments and time slots, and PDF/Excel export of the result.
 
 **Richer constraints.** Laboratory sessions of two consecutive periods, room types and teacher
 availability, each either built into the session's option lists or added as a penalty.
@@ -1251,7 +1303,7 @@ parallel algorithms," *Management Science*, vol. 37, no. 1, pp. 98–113, 1991.
 
 | | |
 |---|---|
-| «Screenshot 1» | The page before a run — dataset summary and *Generate timetable* button |
+| «Screenshot 1» | The page before a run — dataset summary, parameter fields and *Generate timetable* button |
 | «Screenshot 2» | A run in progress — stat tiles and live chart |
 | «Screenshot 3» | After a run — result line and timetable, batch view |
 | «Screenshot 4» | Timetable, teacher view |
@@ -1343,7 +1395,7 @@ for (const i of genes) {
 ```bash
 npm install
 npm run dev      # open the page, press "Generate timetable"
-npm test         # 8 tests
+npm test         # 10 tests
 npm run build    # production bundle in dist/
 ```
 

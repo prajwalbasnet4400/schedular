@@ -8,13 +8,15 @@ exported to PNG for the printed report.
 
 ## 1. Use Case Diagram
 
-One actor. There is no login, so anyone who opens the page can generate and view.
+One actor. There is no login, so anyone who opens the page can edit the data, generate and view.
 
 ```mermaid
 flowchart LR
   User(["User<br/>(Administrator)"])
 
   subgraph System["Automated College Timetable Generator"]
+    UCD["Edit college data<br/>(courses, teachers, rooms, batches)"]
+    UC0["Set GA parameters"]
     UC1["Generate timetable"]
     UC2["Watch generation progress"]
     UC3["View timetable"]
@@ -23,6 +25,8 @@ flowchart LR
     UC6["By room"]
   end
 
+  User --- UCD
+  User --- UC0
   User --- UC1
   User --- UC3
 
@@ -40,10 +44,10 @@ The seven steps of proposal section 4.3.2, with our one addition (targeted repai
 
 ```mermaid
 flowchart TD
-  Start([Start]) --> Load["Load fixed data<br/>(src/data.ts)"]
-  Load --> Expand["Step 1: Build problem<br/>one gene per session (180),<br/>qualified teachers + rooms that fit"]
-  Expand --> Valid{"Every course has a teacher<br/>and every batch fits a room?"}
-  Valid -->|No| Error["Throw error naming the course / batch"] --> Stop([Stop])
+  Start([Start]) --> Load["Load college data<br/>(sample in src/data.ts,<br/>as edited on the page)"]
+  Load --> Expand["Step 1: Build problem<br/>one gene per session (48 in the sample),<br/>qualified teachers + rooms that fit"]
+  Expand --> Valid{"Course codes unique and known,<br/>every course has a teacher,<br/>every batch fits a room?"}
+  Valid -->|No| Error["Show error naming the course / batch,<br/>disable Generate"] --> Stop([Stop])
   Valid -->|Yes| Init["Step 2: Random population<br/>N = 100"]
   Init --> Eval["Step 3: Evaluate fitness<br/>f = 1 / (1 + penalty)"]
   Eval --> Rank["Rank by fitness,<br/>report progress to chart"]
@@ -152,7 +156,7 @@ classDiagram
   class engine_ts {
     <<module>>
     +CONFIG
-    +runGA(problem, onProgress, seed) Promise~Result~
+    +runGA(problem, onProgress, config) Promise~Result~
   }
 
   Problem "1" --> "1" CollegeData
@@ -183,6 +187,7 @@ flowchart TB
   subgraph Browser["Browser (served by Vite in development)"]
     subgraph UI["React 18 + TypeScript"]
       App["App.tsx<br/>Generate button, stat tiles"]
+      Editor["DataEditor.tsx<br/>edit courses / teachers / rooms / batches<br/>(in memory only)"]
       Chart["Recharts line chart<br/>(hard violations, best fitness)"]
       Grid["Timetable.tsx<br/>HTML table by batch / teacher / room"]
     end
@@ -191,10 +196,12 @@ flowchart TB
       Ops["problem / population / fitness<br/>selection / crossover / mutation / repair"]
       Rng["rng.ts (seed 42)"]
     end
-    Data["data.ts<br/>fixed college data"]
+    Data["data.ts<br/>sample college data"]
   end
 
-  App -->|"buildProblem(COLLEGE)"| Data
+  App -->|"initial / reset data"| Data
+  Editor -->|"edited CollegeData"| App
+  App -->|"buildProblem(data)"| Ops
   App -->|"runGA(problem, onProgress)"| Run
   Run -->|"progress each generation"| Chart
   Run -->|"best chromosome"| Grid
