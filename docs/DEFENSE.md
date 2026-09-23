@@ -1,8 +1,8 @@
 # Defense Preparation
 
 Anticipated examiner questions with prepared answers. Questions are grouped by what the
-panel is actually testing. Where an answer references code, the file is named so you can
-open it on the spot — that is far more convincing than describing it.
+panel is actually testing. Where an answer references code, the file and line are named so
+you can open it on the spot. That is far more convincing than describing it.
 
 **The single most important rule:** if you do not know, say "I don't know, but here is how
 I would find out." A confident wrong answer loses more marks than an honest gap.
@@ -13,35 +13,34 @@ I would find out." A confident wrong answer loses more marks than an honest gap.
 
 ### "Why not just use backtracking or a constraint solver?"
 
-Backtracking is complete — it finds a solution if one exists — but its cost explodes. On our
-benchmark instance there are 204 sessions, each choosable from roughly 3 teachers × 11 rooms
-× 36 slots. The search space is about 10^500 configurations (the benchmark prints this
-figure; see `benchmarks/run.ts`, `estimateSearchSpaceLog10`). Backtracking explores that
-tree systematically, and a bad choice near the root is only discovered after exploring an
-enormous subtree.
+Backtracking is complete (it finds a solution if one exists), but its cost explodes. Our
+data has 180 sessions, each choosable from about 3 qualified teachers × up to 15 rooms × 36
+slots. Multiplying the choices per session gives roughly 10^523 possible timetables.
+Backtracking explores that tree systematically, and a bad choice near the root is only
+discovered after exploring an enormous subtree.
 
 A genetic algorithm gives up completeness in exchange for tractability. It cannot prove no
-solution exists, but it reaches a conflict-free timetable in under a second. For an
-administrator who needs a usable timetable on Sunday morning, that trade is the right one.
+solution exists, but on our data it reaches a clash-free timetable in about seven
+generations and under half a second. For an administrator who needs a usable timetable,
+that trade is the right one.
 
 ### "Why is this problem NP-hard?"
 
 Even and Itai proved in 1976 that the general timetabling problem is NP-complete, by
-reduction from graph colouring [reference 1 in the proposal]. The intuition: model each class
-session as a vertex, join two vertices whenever they share a teacher, a room or a batch, and
-a conflict-free timetable is exactly a proper colouring of that graph where colours are time
+reduction from graph colouring [reference 1 in the proposal]. The intuition: make each class
+session a vertex, join two vertices whenever they share a teacher, a room or a batch, and a
+clash-free timetable is exactly a proper colouring of that graph where the colours are time
 slots. Graph colouring is NP-complete, so timetabling is at least as hard.
 
 ### "Isn't a GA just random search?"
 
-No, and the distinction is selection. Random search samples independently — each guess is
-unrelated to the last. A GA carries information forward: tournament selection biases
+No, and the difference is selection. Random search samples independently: each guess is
+unrelated to the last. A GA carries information forward. Tournament selection biases
 reproduction toward better chromosomes, crossover recombines partial solutions that already
 work, and elitism guarantees the best solution found is never lost.
 
-The evidence is in the benchmark output. Our best fitness climbs from 0.00009 to conflict-free
-in thirteen generations. Random sampling of 1,300 chromosomes (13 generations × 100) from a
-10^500 space would find nothing.
+The evidence: the default run starts at 50 hard violations and reaches zero at generation
+7. That is 700 chromosomes out of a 10^523 space. Random sampling would find nothing.
 
 ---
 
@@ -49,295 +48,271 @@ in thirteen generations. Random sampling of 1,300 chromosomes (13 generations ×
 
 ### "Explain your fitness function."
 
-`Fitness = 1 / (1 + total_penalty)`, exactly as proposal section 4.3.2 Step 3 specifies.
-`total_penalty` is a weighted sum of constraint violations. A perfect timetable has zero
-penalty and scores exactly 1.0 — there is a test asserting precisely that
-(`fitness.test.ts`, "returns exactly 1.0 for a flawless timetable").
+`Fitness = 1 / (1 + total_penalty)`, exactly as proposal section 4.3.2 Step 3 specifies
+(`src/ga/fitness.ts:71`). `total_penalty` is a weighted sum of violations
+(`fitness.ts:68`).
 
-Seven hard constraints carry weight 100 each; four soft constraints carry weights between
-0.1 and 0.3.
+- **Hard, weight 100 each** (`fitness.ts:25`): teacher clash, room clash, batch clash.
+- **Soft**: teacher idle gaps at 0.3 and uneven daily spread per batch at 0.2
+  (`fitness.ts:26-27`).
+
+The other two hard constraints, teacher qualification and room capacity, are not in the
+fitness function at all. They are enforced by construction (see section C), so they can
+never be violated.
 
 ### "Why those particular soft weights? They look arbitrary."
 
-They are not arbitrary, and the story is worth telling because it is a genuine experimental
-finding. The first implementation used weights of 3, 2, 2 and 1. The algorithm stalled at six
-hard violations and never recovered.
+They are chosen so that all soft penalty together stays below the cost of one hard
+violation. A realistic timetable always has some idle gaps and some unevenness; our final
+timetables carry a soft penalty of about 8 to 10. If the soft weights were large, a move
+that removed a genuine double-booking could be rejected because it added a few idle gaps.
+Keeping soft < 100 means the algorithm always fixes clashes first, then polishes. The
+reasoning is written in the comment at `fitness.ts:15-16`.
 
-The reason is that a realistic timetable carries around 190 unavoidable soft violations — a
-teacher with one idle hour is a normal timetable, not a broken one. At those weights the soft
-term was contributing about 40% of the total penalty, so a move that removed a genuine
-double-booking could be rejected because it introduced a few idle gaps. The signal was
-drowned.
-
-Scaling the soft weights down so their total stays well below the cost of a single hard
-violation restores the intended behaviour: eliminate every conflict first, then polish. The
-reasoning is recorded in a comment in `packages/shared/src/ga.ts`.
+That is a design rule, not a derivation. The exact values 0.3 and 0.2 are hand-picked
+within it, and we say so in the limitations.
 
 ### "You added a constraint that is not in your proposal. Why?"
 
-Yes — batch double-booking. The proposal names three hard constraints: teacher conflict,
-room conflict and capacity. A fourth is indispensable: without it the algorithm produces
-timetables where one batch of students is scheduled into two rooms at the same time. Those
-timetables satisfy the proposal's stated constraints and are still useless.
+Yes: batch clash. The proposal names teacher conflict, room conflict and capacity. Without a
+batch constraint the algorithm happily produces timetables where one group of students is
+scheduled into two rooms at the same time. Those timetables satisfy the proposal's stated
+constraints and are still useless.
 
-We chose to implement it and document the addition rather than either omit it or slip it in
-silently. It is flagged in the code comment at the top of `fitness.ts` and in the report's
-implementation chapter.
+We implemented it and documented the addition rather than omit it or slip it in silently.
+It is one line (`fitness.ts:61`) and is listed in the header comment.
 
 ### "Your fitness counts a three-way clash as two violations, not three. Is that a bug?"
 
-It is a deliberate consequence of the bucketed counting method, and we tested it. When k
-sessions land in the same slot, we count k−1 collisions rather than the k(k−1)/2 pairs a
-naive comparison would count. The two agree exactly on whether a violation exists, which is
-what determines correctness; they differ only in magnitude when three or more sessions
-collide, which is rare and self-correcting. There is a test comparing our counter against a
-naive O(n²) recount (`engine.test.ts`, "agrees with an independent recount of violations").
+It is a consequence of the counting method. Each (teacher, slot), (room, slot) and (batch,
+slot) cell remembers the first gene that took it; every later gene landing there is one
+violation (`fitness.ts:46-55`). So k sessions in one cell count k−1, not the k(k−1)/2 pairs
+a naive comparison gives. The two agree exactly on whether a clash exists, which is what
+matters for correctness; they differ only in size when three or more collide, which is
+rare and still penalised. We do not have a separate test comparing against a pairwise
+recount; the clash tests in `ga.test.ts` cover the two-gene case.
+
+### "How is the fitness function fast enough?"
+
+It is linear, not quadratic. Comparing every gene with every other would be 180² per
+evaluation. Instead each gene claims three cells in flat `Int32Array`s (`fitness.ts:40-42`),
+so a full evaluation touches each gene once, plus a fixed scan of the grid for the soft
+constraints.
 
 ---
 
 ## C. The implementation
 
+### "What is a gene?"
+
+`{ teacher, room, slot }` (`src/ga/problem.ts:27-31`). The list of sessions is fixed when the
+problem is built (a course with 3 lectures a week becomes 3 sessions), so gene *i* always
+describes session *i*. Course and batch never change, so the gene does not store them.
+
+### "How do you guarantee no gene has an unqualified teacher or a room that is too small?"
+
+By construction. When the problem is built, each session gets a list of qualified teachers
+and a list of rooms big enough for its batch (`problem.ts:46-47`). The initial population
+(`population.ts:11-15`), mutation (`mutation.ts:15-16`) and repair (`repair.ts:32-34`) only
+ever draw from those lists. There is a test asserting every session's lists are valid, and
+one running mutation at rate 1.0 and checking every room stays in the allowed list.
+
+If the data makes that impossible (a course nobody can teach, a batch no room can seat),
+building the problem throws a plain error naming it (`problem.ts:49-50`).
+
 ### "Show me the crossover code."
 
-`server/src/ga/crossover.ts` — about ten lines. A random cut point, genes before it from
-parent A, genes after from parent B.
+`src/ga/crossover.ts`, three lines of logic. A random cut point; genes before it from parent
+A, genes after from parent B.
 
-The point worth making: the offspring is **always valid and needs no repair**. That follows
-from the encoding. Gene *i* of every chromosome answers the same question — "where does
-requirement *i* go?" — so splicing two parents anywhere still yields exactly one placement
-per required session. Encodings that store a permutation need a repair operator here.
-Ours does not.
+The point worth making: the child is **always a complete, valid timetable**. Gene *i* of
+every chromosome answers the same question ("where does session *i* go?"), so splicing two
+parents anywhere still gives exactly one placement per session. Encodings that store a
+permutation need a repair step here. Ours does not. There is a test checking every child
+gene came from one of its parents.
 
-### "How do you guarantee a mutation never produces an invalid assignment?"
+### "How does mutation work?"
 
-Each `SessionRequirement` pre-computes three eligible sets: qualified instructors, rooms of
-the right type and sufficient capacity, and start slots leaving room for the session's
-duration (`context.ts`). Mutation only ever draws from those sets, so it cannot produce an
-unqualified teacher or a lab in a lecture hall. There is a property test running 500 rounds
-of mutation at rate 1.0 and asserting every gene stays in its eligible set.
+Per-gene rate 0.05 (`engine.ts:26`). A mutated gene gets a new room, a new slot, or both,
+chosen with equal probability (`mutation.ts:14-16`). Mutation does not change the teacher. A
+session's teacher is picked at random in the first population and afterwards only changed
+by repair; crossover passes whole genes on unchanged.
 
-### "How do you handle a two-hour laboratory?"
+### "What are the parameters, and where do they come from?"
 
-A lab is one gene with `duration = 2`, not two independent genes. Because the placement is a
-start slot and a duration, the two periods cannot be separated by crossover or mutation —
-contiguity holds by construction rather than by a repair pass. Start slots that would run
-past the end of the day are excluded from the eligible set, so a lab can never begin in
-period 6. Both properties are tested.
+All from the proposal, in one place (`engine.ts:22-32`): population 100, max 1000
+generations, crossover 0.8, mutation 0.05, tournament k = 5, elitism 20%. The only one we
+added is patience 20 (see termination below).
 
 ### "Is this really written from scratch?"
 
-Yes. Open `server/package.json`: the dependencies are Express, Prisma, bcrypt, JWT, exceljs,
-pdfmake, Zod, cors, helmet and morgan. There is no GA library, no solver, no optimisation
-package. Every operator in `server/src/ga/` is our own code, and the directory is small
-enough to read aloud.
+Yes. Open `package.json`: the runtime dependencies are React, React DOM and Recharts. There
+is no GA library, no solver, no optimisation package. Every operator in `src/ga/` is our own
+code, one file per proposal step, and the whole directory is small enough to read aloud.
 
-The one non-obvious inclusion is `rng.ts`, a four-line seedable random generator. We wrote it
-rather than using `Math.random()` because reproducible benchmarks require a fixed random
-stream — a performance comparison the examiner cannot reproduce proves nothing.
+`rng.ts` is a seeded random generator (mulberry32). We wrote it rather than use
+`Math.random()` so every run is reproducible.
+
+### "How does the chart update live if JavaScript is single-threaded?"
+
+The loop yields to the browser once per generation with `await new Promise(r =>
+setTimeout(r, 0))` (`engine.ts:121`). React gets a chance to redraw the chart between
+generations. Without it, the page would freeze and the chart would appear all at once at
+the end.
 
 ---
 
 ## D. Behaviour and robustness
 
-### "What happens if the input data makes a timetable impossible?"
-
-The system detects it before running the algorithm and says exactly what is wrong. This is
-NFR4, implemented in `server/src/ga/feasibility.ts`.
-
-This matters because a GA cannot distinguish "no solution exists" from "I haven't found one
-yet" — both look like a population that stops improving. Left to itself it would run 1000
-generations and report a low fitness score, telling the administrator nothing actionable.
-Instead we check necessary conditions up front: are there enough room-periods for the
-required sessions, does every course have a qualified teacher, can every batch fit in some
-room, is any sole-qualified instructor asked for more hours than they have declared.
-
-**This is worth demonstrating live.** It caught a real bug in our own seed data: we had
-capped laboratory capacity at 40 while BBA section A has 55 students, and the checker
-refused to run with the message *"No laboratory can seat batch BBA Sem 5A (55 students) for
-MGT315. Add a laboratory with capacity of at least 55."* We fixed the data, not the check.
-
 ### "What if the algorithm gets stuck in a local optimum?"
 
-It did, and we measured exactly what fixed it. Run `npm run bench:ablation`. The result is
-blunt and you should state it before the panel discovers it:
+It does, without help, and we measured it. We ran 10 seeds (1–10) with and without our
+targeted repair step:
 
-| Variant | Solved | Mean generations | Final hard violations |
-|---|:--:|---:|---:|
-| Proposal only (Steps 1–7) | **0/5** | — | 6.40 |
-| Plus random immigrants | **0/5** | — | 6.40 |
-| Plus targeted repair | **5/5** | 13.4 | 0.00 |
-| Both (shipped default) | **5/5** | 13.4 | 0.00 |
+| Variant | First clash-free generation (mean) | Range | Missed 500-gen target | Final soft penalty |
+|---|---:|---:|:--:|---:|
+| Proposal only (Steps 1–7) | 378.8 | 286–572 | 2 / 10 | 27.3–35.9 |
+| Plus targeted repair (shipped) | 7.1 | worst 8 | 0 / 10 | 8.0–9.6 |
 
-**The algorithm exactly as specified in our proposal does not solve the benchmark instance.**
-It plateaus at around six hard-constraint violations across every seed. Steps 1–7 are a
-correct description of a genetic algorithm; they are simply not sufficient for this problem at
-this scale. Say this plainly — it is a finding, not a failure, and it is the most interesting
-thing the project discovered.
+**The algorithm exactly as the proposal specifies does get there, but slowly: about 380
+generations on average, and two seeds out of ten miss the proposal's 500-generation
+target.** The reason is that once the population becomes similar, crossover makes
+near-copies, and random mutation rarely hits the handful of genes that are actually
+clashing.
 
-Two refinements were added:
+**Targeted repair** (`src/ga/repair.ts`) fixes this. The fitness function already records
+which genes clash (`fitness.ts:52-53`). Repair takes up to 12 of them, tries 8 random new
+placements for each, and keeps a change only if the total penalty falls (`repair.ts:37`).
+It cannot make a chromosome worse. The result is about 50× fewer generations.
 
-1. **Random immigrants** — after 50 generations without improvement, the weakest individuals
-   are replaced with fresh random chromosomes. A converged population has no diversity left
-   for crossover to exploit; immigrants reintroduce it. Elites are never displaced.
-2. **Targeted repair** (`repair.ts`) — the fitness evaluator already knows which genes
-   collided while counting violations, so this operator asks it and tries a bounded number of
-   alternative placements for those specific genes, keeping a change only if the penalty
-   falls. It is a strict improvement filter and cannot make a chromosome worse.
+A GA combined with local search like this is known in the literature as a **memetic
+algorithm**. Say plainly that repair is our addition, not part of the proposal; it is
+labelled as such at the top of `repair.ts`.
 
-The hybrid of a GA with local search is known in the literature as a **memetic algorithm**.
-
-Be ready for the follow-up: **only repair actually matters.** Random immigrants contribute
-nothing measurable — 0/5 without repair, and no gain in generations or time alongside it. The
-two operators address different failure modes: immigrants restore population *diversity*,
-repair supplies *directed* change. The measurements say the binding problem here was blind
-mutation, not lost diversity. We kept immigrants in the default because they cost nothing
-(789 ms against 787 ms) and insure against a different failure mode on other datasets — but
-that is a judgement, not a result, and we say so in the report.
+(To reproduce the "without repair" row: replace the `repair(...)` call at `engine.ts:115`
+with a plain `evaluate(problem, child)` and run the seeds.)
 
 ### "Your algorithm never reaches fitness 1.0. Isn't that a failure?"
 
-This is the sharpest question the panel can ask, and the answer is that the proposal contains
+This is the sharpest question the panel can ask. The answer is that the proposal contains
 an ambiguity we had to resolve.
 
-Section 4.3.2 Step 7 says the loop runs "until a chromosome achieves a fitness score of 1.0".
-Taken literally that can never fire on real data: fitness is 1/(1+penalty) and penalty
-includes soft constraints, of which any realistic timetable has a few. Waiting for exactly
-1.0 would mean always running all 1000 generations.
+Section 4.3.2 Step 7 says the loop runs "until a chromosome achieves a fitness score of
+1.0". Taken literally that almost never fires: fitness is 1/(1+penalty), and any realistic
+timetable has some soft penalty (a teacher with one free hour). Our runs end at fitness
+about 0.09–0.11, which is soft penalty around 8–10 and **zero hard violations**.
 
-But Expected Outcome 2 of the same proposal writes "a fitness score of 1.0 **(zero hard
-constraint violations)**" — equating the two. That is the intent, so the implementation stops
-once zero hard violations has been reached *and* the soft score has stopped improving. The
-literal 1.0 test is retained as well, and there is a test proving it fires on a dataset that
-admits a flawless timetable.
+Expected Outcome 2 of the same proposal writes "a fitness score of 1.0 **(zero hard
+constraint violations)**", equating the two. That is the intent. So the loop stops when
+(`engine.ts:101-102`):
 
-We report **time to the first conflict-free timetable** as the headline metric, because that
-is the moment the administrator has something usable.
+1. fitness is exactly 1.0 (kept from the proposal), or
+2. the best timetable is clash-free **and** fitness has not improved for 20 generations, or
+3. 1000 generations are reached.
+
+We report **the generation of the first clash-free timetable** as the headline number,
+because that is the moment the administrator has something usable.
+
+### "What are your results?"
+
+On the fixed data, 10 seeds:
+
+- First clash-free timetable at generation 7.1 on average (worst 8), in about 384 ms (worst
+  442 ms). NFR1 allows 120 seconds and 500 generations.
+- Starting point: 58–65 hard violations in the best random chromosome.
+- Full run including soft polishing: 74–160 generations, 3.3–6.8 s.
+
+The demo uses seed 42: 50 hard violations at generation 1, clash-free at generation 7
+(about 0.4 s), stops at generation 61 (about 2.5 s), fitness 0.0877.
 
 ### "Is the result reproducible?"
 
-Completely. Every run is driven by a seeded generator, and the seed is stored with the run in
-the database. Give the same seed and parameters and you get a byte-identical timetable —
-there is a test asserting exactly that. You can pick any run on the Analysis screen, read off
-its seed, and re-run it.
+Yes. The seed is fixed at 42 (`engine.ts:31`) and every random choice goes through `Rng`.
+Press Generate twice, or reload the page, and you get the same generations, the same
+fitness and the same timetable. Only the elapsed time differs slightly.
 
 ---
 
-## E. Engineering and architecture
+## E. Scope: what the proposal promised and we did not build
 
-### "How is access control enforced?"
+**Volunteer this before it is asked.** Being caught hiding it is far worse than stating it.
 
-By Express middleware (`requireRole` in `server/src/middleware/auth.ts`), applied to every
-mutating route. The React app also hides controls a viewer cannot use, but that is a courtesy
-to the user, not a security boundary — anyone can issue a DELETE with curl. There are
-integration tests that sign in as a viewer and assert 403 on create, update, delete and
-generate.
+### "Your proposal promised CRUD screens, PDF/Excel export, login with roles, PostgreSQL, Express and AG-Grid. Where are they?"
 
-### "Why is validation duplicated on the client and the server?"
+> "We made a deliberate scope decision. The graded contribution of this project is the
+> genetic algorithm, so we cut the system down to exactly what demonstrates it: the data,
+> the seven steps, the live chart and the timetable. Everything else is standard web
+> plumbing that would add a lot of code to explain and nothing to the algorithm."
 
-It is not duplicated — it is defined once. `packages/shared/src/schemas.ts` holds the Zod
-schemas, and both the React forms and the Express middleware import the same objects. That is
-also the concrete justification for the proposal's claim (section 4.2.1) that Node.js was
-chosen so frontend and backend could share TypeScript definitions.
+Then state the status honestly:
 
-### "How does the live progress chart work if Node.js is single-threaded?"
+| Requirement | Status |
+|---|---|
+| FR1 Manage data (CRUD) | **Not implemented.** Data is fixed in `src/data.ts`. |
+| FR2 Generate timetable with GA | Done. |
+| FR3 View timetable | Partial: by batch, teacher or room; plain HTML table, no AG-Grid, no filtering. |
+| FR4 Show progress / performance | Done: live chart and stat tiles. |
+| FR5 Export PDF / Excel | **Not implemented.** |
+| FR6 Login with roles | **Not implemented.** No backend, so nothing to protect. |
+| NFR1 Performance (120 s, 500 generations) | Met: ~0.4 s, ~7 generations; a test checks it. |
+| NFR2 Usability | Met: one page, one button. |
+| NFR3 Data integrity (PostgreSQL) | **No database.** |
+| NFR4 Robustness | Partial: a plain error if a course has no teacher or a batch fits no room; no full feasibility check. |
 
-This is a real problem and we solved it deliberately. The evolutionary loop is CPU-bound and
-synchronous; run straight through it would occupy the process for the entire computation, and
-every progress event would arrive in one burst after the search had already finished — the
-chart would be a replay pretending to be live.
-
-The loop is therefore written as a **generator** that yields once per generation
-(`engine.ts`, the private `steps` method). `run()` drains it synchronously for the CLI and the
-tests; `runAsync()` drains it while returning control to the event loop every few
-generations, so Express can flush each event over the SSE connection. There is exactly one
-implementation of Steps 2–7, so the two paths cannot diverge.
-
-### "Why server-sent events rather than WebSockets?"
-
-The traffic is strictly one-directional — server to browser. SSE needs no additional
-dependency, no protocol upgrade, and the browser reconnects automatically. WebSockets would
-add a library and bidirectional machinery we have no use for.
-
-### "How did you make the fitness function fast enough?"
-
-By bucketing rather than pairwise comparison. The obvious implementation compares every gene
-with every other to find clashes — at our scale that is roughly 200² × 100 population × 1000
-generations, about four billion comparisons, far beyond the 120-second budget.
-
-Instead each (resource, slot) pair indexes into a counter array, and a clash is recorded when
-a bucket that is already occupied is entered. Each gene is touched once, so a full evaluation
-is linear in the number of scheduled periods. The buffers are allocated once and cleared in
-O(1) with a generation-stamp trick, which avoids creating 100,000 large arrays per benchmark
-run and drowning the process in garbage collection.
+If pressed on "why not keep them anyway": every one of those features is independent of the
+algorithm. Adding them back changes nothing in `src/ga/`, because the GA takes plain data in
+and returns a chromosome.
 
 ---
 
 ## F. Testing and evidence
 
-### "How do you know the generated timetable is actually conflict-free?"
+### "How do you know the generated timetable is actually clash-free?"
 
-Three independent layers, deliberately not trusting each other:
+Two ways:
 
-1. **Unit tests** construct chromosomes with each specific violation and assert the evaluator
-   detects it.
-2. **A property-based test** runs 25 independent searches across different seeds and
-   instances, and for every run that reports success, re-checks the *decoded output* directly
-   for double-bookings, capacity overflows and unqualified teachers. This does not trust the
-   fitness counter, so a bug in the counter cannot hide a bug in the schedule.
-3. **An integration test** runs the real HTTP endpoint against the real database and re-checks
-   the persisted assignments the same way.
+1. **Tests** (`src/ga/ga.test.ts`, 8 tests, `npm test`): encoding produces 180 sessions with
+   valid teacher and room lists; the fitness function detects a teacher clash (and flags both
+   genes) and a room clash; crossover and mutation keep genes valid; and a full GA run
+   reaches zero hard violations within 500 generations and 120 seconds.
+2. **Look at it.** The timetable view places every session of the selected batch, teacher or
+   room into its slot. A clash would show as two cards stacked in one cell. Flick through the
+   batch, teacher and room views and there are none.
 
-### "What is your test coverage?"
+Be honest that there is no independent re-check of the decoded output separate from the
+fitness counter; the stacked-card view is the independent check.
 
-65 tests: 43 on the algorithm, 22 on the API. The concentration is deliberate — the GA is the
-graded contribution, so it carries the heaviest testing.
+### "Why so few tests?"
 
-### "Can you prove your performance numbers?"
-
-Run `npm run bench:nfr1` in front of us. It executes ten seeded runs of the NFR1
-configuration and prints a PASS/FAIL against both the 120-second budget and the 500-generation
-target, writing the raw data to CSV. Everything in the Result Analysis chapter comes from
-those files.
+Because the code is small. The tests target the properties the algorithm depends on:
+encoding, constraint detection, operator validity, and the NFR1 result.
 
 ---
 
-## G. Limitations — state these before you are asked
+## G. Limitations: state these before you are asked
 
-Volunteering limitations reads as command of the material. Being caught hiding one does not.
-
-1. **No completeness guarantee.** The GA cannot prove a timetable is impossible; the
-   feasibility checker catches only the necessary conditions we implemented, not every case.
-2. **Consecutive-lab modelling is fixed at two periods.** A three-hour laboratory would need
-   the duration to be configurable per course, which the encoding supports but the UI does not
-   yet expose.
-3. **Soft-constraint weights are hand-tuned.** They were chosen empirically, as the sweep
-   documents, not derived from any principle. Different institutions would likely want
-   different weights, which should be configurable.
-4. **Single-institution scope.** There is no multi-tenancy; one deployment serves one college.
-5. **The mutation rate default is inherited from the proposal, not from our own data.** Our
-   parameter sweep found 0.01 converges faster and produces better soft scores than the
-   specified 0.05. We kept 0.05 as the shipped default so the running system matches the
-   proposal, and report the better value as a finding.
-6. **A scalability ceiling.** Our stress instance — 600 sessions across 30 batches, roughly
-   three times the benchmark configuration — did **not** converge in 600 generations, in any
-   of three runs. The instance is feasible in principle. This is well beyond the scale NFR1
-   specifies and larger than any single TU-affiliated college would schedule as one unit, but
-   it is a real ceiling and we report it as measured. Greedy population seeding and parallel
-   fitness evaluation are the two changes most likely to raise it.
-7. **No mid-semester rescheduling.** Regenerating produces a fresh timetable rather than
-   minimally perturbing the existing one — the more useful behaviour when a single teacher
-   becomes unavailable in week 8. This is the most valuable direction for future work.
+1. **Scope.** No data entry, export, login or database (section E).
+2. **No completeness guarantee.** The GA cannot prove a timetable is impossible, and the
+   only input checks are "every course has a teacher" and "every batch fits some room".
+3. **Simplified model.** Every course is 3 one-hour lectures a week. No labs or consecutive
+   periods, no room types, no teacher availability.
+4. **Soft weights are hand-picked.** 0.3 and 0.2 follow the "soft < one hard" rule, but the
+   exact values are not derived from anything, and a real college would want to set them.
+5. **Repair is not in the proposal.** Without it the plain GA takes about 380 generations
+   and misses the 500-generation target on 2 of 10 seeds. We report that as a finding.
+6. **Fixed data, one scale.** Results are measured on one dataset (180 sessions). We have not
+   measured how it behaves on a much larger college.
+7. **No rescheduling.** Regenerating produces a fresh timetable rather than minimally
+   changing the existing one, which is what an administrator wants when one teacher becomes
+   unavailable mid-semester. This is the most useful direction for future work.
 
 ---
 
 ## H. If something breaks during the demo
 
-- **The API is not responding** — `npm run db:up` then `npm run -w server dev`. Check
-  `http://localhost:4000/api/health`.
-- **The database is empty or corrupted** — `npm run seed` restores the exact benchmark
-  dataset in a few seconds.
-- **A generation run misbehaves live** — there are completed runs stored in the database.
-  Open the Analysis screen, select any earlier run, and show its convergence curve. The
-  timetable screen always displays the most recent completed run.
-- **Everything is broken** — fall back to `npm run ga:cli`, which runs the whole algorithm in
-  the terminal with no browser, no database writes and no HTTP layer.
+- **The page is in a strange state** — reload it. There is nothing stored; the seed is fixed,
+  so the next run is identical.
+- **The dev server is not running** — `npm run dev`, then open `http://localhost:5173`.
+- **Dependencies missing** — `npm install`, then `npm run dev`.
+- **The browser is broken** — run `npm test`. The last test runs the full GA in the terminal
+  and passes only if it finds a clash-free timetable.

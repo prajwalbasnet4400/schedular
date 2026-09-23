@@ -1,33 +1,26 @@
 {
   "name": "schedular",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Automated College Timetable Generator - CACS452 Final Year Project",
-  "workspaces": [
-    "packages/*",
-    "server",
-    "client"
-  ],
+  "type": "module",
   "scripts": {
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "db:reset": "npm run -w server db:reset",
-    "dev": "concurrently -n server,client -c cyan,magenta \"npm run -w server dev\" \"npm run -w client dev\"",
-    "build": "npm run -w @schedular/shared build && npm run -w server build && npm run -w client build",
-    "test": "npm run -w server test",
-    "seed": "npm run -w server seed",
-    "setup": "npm run -w server prisma:generate && npm run -w server db:push && npm run -w @schedular/shared build && npm run -w server seed",
-    "ga:cli": "npm run -w server ga:cli --",
-    "bench": "tsx benchmarks/run.ts all",
-    "bench:nfr1": "tsx benchmarks/run.ts nfr1",
-    "bench:sweep": "tsx benchmarks/run.ts sweep",
-    "bench:scale": "tsx benchmarks/run.ts scale",
-    "bench:ablation": "tsx benchmarks/run.ts ablation"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
-    "tsx": "^4.19.2"
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
   },
   "engines": {
     "node": ">=20"

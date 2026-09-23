@@ -1,7 +1,7 @@
 # Live Demonstration Script
 
-A rehearsed twelve-minute path through the system. Timings assume a panel that interrupts;
-if they don't, you will finish early, which is fine.
+A rehearsed five-minute path through the system. There is one page and one button, so the
+time goes on explaining the algorithm, not on clicking.
 
 **Rehearse this end to end at least twice on the machine you will present from.**
 
@@ -11,203 +11,140 @@ if they don't, you will finish early, which is fine.
 
 ```bash
 cd schedular
-npm run db:up                    # PostgreSQL container
-npm run seed                     # restore the exact benchmark dataset
-npm run dev                      # API on :4000, client on :5173
+npm install        # once
+npm test           # 8 tests should pass; confirms the machine is fine
+npm run dev        # opens on http://localhost:5173
 ```
 
-Then, in the browser:
+Then:
 
-1. Open `http://localhost:5173`, sign in as **admin@academia.edu.np / admin123**.
-2. **Generate one timetable now and let it finish.** This guarantees the Timetable and
-   Analysis screens have something to show even if the live run misbehaves later.
-3. Sign out, so you can demonstrate the login.
-4. Have a second browser tab open on `docs/UML.md` rendered, and an editor open on
-   `server/src/ga/`.
-5. Close everything else. Silence notifications.
+1. Open `http://localhost:5173`. **Do not press Generate yet.**
+2. Have an editor open on `src/ga/`, and a terminal ready in the project folder.
+3. Close everything else. Silence notifications.
 
-**Checklist:** `curl localhost:4000/api/health` returns ok · the seed reports 30 courses,
-20 instructors, 15 rooms · one completed run already exists.
+Nothing needs resetting between rehearsals: the seed is fixed at 42, so every run is
+identical. Reloading the page is a full reset.
 
 ---
 
-## 1. Frame the problem (1 min) — no screen
+## 1. Frame the problem (45 s), no screen — *Prajwal*
 
-> "Scheduling a college timetable is NP-hard. At Academia International College, a committee
-> spends two to three weeks each semester building the timetable in Excel, and it still ships
-> with clashes. Our system takes the same data they already collect and produces a
-> conflict-free timetable in under a second."
-
-Do not open anything yet. Let the claim land, then prove it.
+> "Scheduling a college timetable is NP-hard. A committee spends weeks each semester building
+> it by hand, and it still ships with clashes. Our genetic algorithm produces a clash-free
+> timetable in under a second."
 
 ---
 
-## 2. Sign in and show the data (1.5 min)
+## 2. The data (30 s) — *Prajwal*
 
-Sign in as the administrator. On the dashboard, point at the counts: **30 courses, 20
-instructors, 15 rooms, 12 batches, 36 time slots.**
+Point at the line under the title: **12 batches, 30 courses, 20 teachers, 15 rooms → 180
+sessions to place in 36 weekly slots.**
 
-> "This is exactly the configuration our proposal names in NFR1 — six programmes, thirty
-> courses, twenty teachers, fifteen rooms — so every number we quote today is measured on the
-> data you are looking at."
-
-Open **Instructors**, click **Edit** on any instructor, and scroll to the availability matrix.
-
-> "Two hard constraints live here. An instructor can only teach subjects they are qualified
-> for, and only in periods they have declared themselves available. Notice this instructor is
-> unavailable all day Friday — the algorithm will respect that."
+> "This is the configuration our proposal names in NFR1: six programmes, thirty courses,
+> twenty teachers, fifteen rooms. Two sections per programme, every course three lectures a
+> week, Sunday to Friday, six morning periods. The data is fixed in `src/data.ts` so every
+> number we quote is measured on what you are looking at."
 
 ---
 
-## 3. Feasibility check (1 min) — *the question the panel will ask anyway*
+## 3. Generate, live (1.5 min) — *Shekhar*
 
-Go to **Generate**. Point at the statistics strip.
+> "The parameters are exactly the proposal's: population 100, crossover 0.8, mutation 0.05,
+> tournament of 5, 20% elitism, up to 1000 generations."
 
-> "Before running anything, the system checks whether the data can produce a timetable at
-> all. 204 sessions to place into 540 room-periods, 41.5% utilisation — feasible."
+Press **Generate timetable**. Stay quiet for two seconds and let them watch the chart.
 
-> "This matters because a genetic algorithm can't tell 'no solution exists' from 'I haven't
-> found one yet'. Both look like a population that stops improving. Without this check the
-> administrator would wait for a thousand generations and get a bad score with no explanation
-> of what to fix."
+> "The red line is hard violations: teacher, room or batch clashes. It starts at fifty. By
+> generation seven it is zero. That took about 0.4 seconds; our requirement allowed 120."
 
-**Optional, if you have the nerve and the time** — it is the strongest single moment
-available. In another tab, edit any laboratory's capacity down to 20, return, click
-**Re-check data**:
+> "It keeps going. Every clash is gone, so now it is polishing soft preferences: fewer idle
+> gaps for teachers and a more even spread of each batch's classes across the week. That is
+> the blue fitness line creeping up."
 
-> "It now refuses to run, and tells the administrator exactly which record to fix rather
-> than failing silently."
+When it stops (generation 61, about 2.5 s), read the green line:
 
-Restore the capacity before continuing.
-
----
-
-## 4. Generate, live (3 min) — *the centrepiece*
-
-Walk the parameter panel briefly: population 100, crossover 0.8, mutation 0.05, tournament
-5, elitism 0.2, 1000 generations.
-
-> "These are the exact values specified in our proposal. Nothing here is tuned for the demo."
-
-Press **Generate timetable**. Then stop talking and let them watch the chart for a few
-seconds. When hard violations reach zero:
-
-> "Generation thirteen. The red line is hard-constraint violations — it started at over a
-> hundred and is now zero. That took about 750 milliseconds. Our requirement allowed 120
-> seconds."
-
-> "It's still running. Every conflict is gone, so it's now improving soft preferences —
-> reducing teachers' idle gaps and spreading each batch's classes more evenly across the
-> week."
-
-Let it run in the background; move on rather than waiting for it.
+> "It stops once it is clash-free and hasn't improved for 20 generations. Fitness is about
+> 0.09, not 1.0, because a real timetable always has a few soft penalties. Our proposal's
+> Expected Outcome 2 defines fitness 1.0 as zero hard violations, and that is what we have."
 
 ---
 
-## 5. The timetable (2.5 min)
+## 4. The timetable (1 min) — *Shekhar*
 
-Open **Timetable**. Note the green banner and the statistics, then select a specific batch —
-**BCA — Semester 5A**.
+Scroll down to the grid. It opens on **BCA 5A**.
 
-> "This is what a student receives. Blue is a lecture, orange is a laboratory. Notice the lab
-> occupies two consecutive periods in the same lab room, marked 'cont.' in the second hour —
-> that's one session with a duration, not two sessions that happened to land next to each
-> other."
+> "This is what a student group receives. Each cell shows course, teacher and room. If two
+> classes landed in the same slot for this batch, you would see two cards stacked in one
+> cell. There are none."
 
-Switch to **Teacher view** and pick an instructor.
+Switch the first dropdown to **By teacher** and pick a teacher, then **By room** and pick a
+room.
 
-> "The same timetable from the teacher's perspective. This is the view that replaces the
-> printed sheet each teacher currently gets."
-
-Switch to **Room view** briefly, then click **Export PDF**. Open the downloaded file.
-
-> "One page per batch, print-ready, distributable as it stands. Excel gives one worksheet per
-> batch instead."
+> "Same timetable from a teacher's side and a room's side. Again, never two cards in one cell:
+> no teacher in two places, no room booked twice."
 
 ---
 
-## 6. Show the algorithm code (2 min)
+## 5. The code (1 min, optional) — *Prajwal*
 
-Switch to the editor, `server/src/ga/`.
+Switch to the editor on `src/ga/`.
 
-> "One file per stage of the algorithm, matching the seven steps in our proposal."
+> "One file per step of our proposal: `problem.ts` is Step 1, the encoding, `population.ts`
+> Step 2, `fitness.ts` Step 3, `selection.ts` 4, `crossover.ts` 5, `mutation.ts` 6,
+> `engine.ts` 7. `repair.ts` is our addition, and it says so at the top."
 
-Open **`crossover.ts`**. It is ten lines.
+Open **`crossover.ts`**:
 
-> "Single-point crossover. The important property is that the offspring is always valid and
-> never needs repairing — that's a consequence of the encoding: gene *i* of every chromosome
-> answers the same question, so splicing two parents anywhere still gives exactly one
-> placement per required session."
+> "Single-point crossover. The child is always valid because gene *i* always means session
+> *i*, so splicing anywhere still gives one placement per session."
 
-Open **`fitness.ts`** and point at the formula line.
+Open **`fitness.ts`** at line 71: `1 / (1 + penalty)`.
 
-> "`1 / (1 + total_penalty)`, exactly as the proposal specifies. Seven hard constraints at
-> weight 100, four soft constraints at fractional weights."
+If time allows, open **`repair.ts`**:
 
-Then open `server/package.json`.
-
-> "No genetic algorithm library, no solver, no optimisation package. Express, Prisma, the
-> export libraries — that's it. Every operator is our own code."
+> "Without this, the plain GA takes about 380 generations and misses the 500 target on two
+> seeds out of ten. With it, about seven. It only keeps a change that lowers the penalty."
 
 ---
 
-## 7. Evidence (1.5 min)
+## 6. Tests (30 s) — *Prajwal*
 
-In a terminal:
+In the terminal:
 
 ```bash
 npm test
 ```
 
-> "Sixty-five tests. The important one is the property-based test: it runs twenty-five
-> independent searches and, for every run reporting success, re-checks the decoded timetable
-> directly for double-bookings. It doesn't trust the fitness counter, so a bug in the counter
-> can't hide a bug in the schedule."
-
-Then:
-
-```bash
-npm run bench:nfr1
-```
-
-> "Ten seeded runs of the benchmark configuration. Mean 753 milliseconds to a conflict-free
-> timetable, worst case 800. The requirement is 120 seconds — PASS. Thirteen generations
-> against a target of 500 — PASS. Every number in our Result Analysis chapter comes from this
-> command, and you can run it yourself."
+> "Eight tests: the encoding, clash detection, that crossover and mutation keep genes valid,
+> and a full run that must be clash-free within 500 generations and 120 seconds."
 
 ---
 
-## 8. Close (30 s)
+## 7. Close (30 s) — *Shekhar*
 
-Return to the **Analysis** screen showing the run history.
+> "We deliberately cut the system down to the algorithm. Data entry, export, login and the
+> database from the proposal are not implemented; the GA is what we built and measured. The
+> clearest next step is rescheduling: adjusting an existing timetable when one teacher
+> becomes unavailable, instead of generating a fresh one."
 
-> "Every run is stored with the parameters that produced it, so configurations can be
-> compared directly. Our parameter sweep actually found that a mutation rate of 0.01
-> converges faster than the 0.05 we specified in the proposal — we've kept 0.05 as the
-> default so the system matches the proposal, and reported the better value as a finding."
-
-> "The largest limitation is that regenerating produces a fresh timetable rather than
-> minimally adjusting the existing one. When a single teacher becomes unavailable in week
-> eight, minimal perturbation is what an administrator actually wants. That's the clearest
-> direction for future work."
+Saying the scope cut out loud here is intentional. See `DEFENSE.md` section E.
 
 ---
 
 ## Division of labour
 
-Agree this in advance and rehearse the handovers — a panel notices hesitation.
+**Not yet agreed; confirm between Prajwal and Shekhar before rehearsal.** Proposed:
 
 | Section | Speaker |
 |---|---|
-| 1–3 Problem, data, feasibility | Member A |
-| 4 Live generation | Member B |
-| 5 Timetable and export | Member B |
-| 6 Algorithm code | Member A |
-| 7 Tests and benchmarks | Member A |
-| 8 Close and limitations | Member B |
+| 1–2 Problem and data | Prajwal |
+| 3 Live generation | Shekhar |
+| 4 Timetable | Shekhar |
+| 5–6 Code and tests | Prajwal |
+| 7 Close and scope | Shekhar |
 
-Both members must be able to answer questions on any section. Panels deliberately ask the
-member who did not present a part.
+Both must be able to answer questions on any section. Panels deliberately ask the member
+who did not present a part.
 
 ---
 
@@ -215,11 +152,10 @@ member who did not present a part.
 
 | Symptom | Action |
 |---|---|
-| API not responding | `npm run db:up && npm run -w server dev`; check `/api/health` |
-| Database empty or wrong | `npm run seed` — a few seconds, restores exactly |
-| Live run misbehaves | Analysis screen → select the pre-generated run → show its curve |
-| Browser or client broken | `npm run ga:cli` — the whole algorithm in the terminal |
-| Total failure | Screenshots in `docs/screenshots/`, and the exported PDF |
+| Page stuck or odd state | Reload the page. Nothing is stored; the next run is identical. |
+| Page does not load | `npm run dev` in the terminal, then reopen `http://localhost:5173` |
+| Module errors on start | `npm install`, then `npm run dev` |
+| Browser unusable | `npm test`: the last test runs the whole GA in the terminal |
 
 Never debug in front of the panel. Switch to the fallback, keep talking, and offer to show
 the fix afterwards.

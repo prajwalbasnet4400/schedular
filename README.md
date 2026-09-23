@@ -1,7 +1,7 @@
 # Automated College Timetable Generator
 
-A web application that builds conflict-free weekly college timetables using a Genetic
-Algorithm implemented from scratch in TypeScript.
+A Genetic Algorithm, written from scratch in TypeScript, that builds a clash-free weekly
+college timetable. It runs entirely in the browser: press **Generate** and watch it converge.
 
 **Final year project — CACS452, Project III**
 B.Sc. Computer Science and Information Technology, Tribhuvan University
@@ -11,160 +11,62 @@ Academia International College, Department of Computer Application
 
 ---
 
-## What it does
+## Run it
 
-Timetable scheduling is NP-hard: assignments of courses to teachers, rooms and time slots
-interact, so a change anywhere can break something everywhere. Most colleges still do it by
-hand over two to three weeks, and still ship timetables containing clashes.
-
-This system takes the institutional data a college already collects — teachers and the
-subjects they can teach, courses and their weekly loads, rooms and their capacities, student
-batches and their sizes — and evolves a population of candidate timetables until one
-satisfies every hard constraint.
-
-On the benchmark configuration named in the proposal (6 programmes, 30 courses, 20 teachers,
-15 rooms, 204 sessions), it finds a conflict-free timetable in **under one second**.
-
-| Requirement | Budget | Measured | Result |
-|---|---|---|---|
-| NFR1 — time to conflict-free timetable | 120,000 ms | 753 ms mean, 800 ms worst (10 seeds) | **PASS** |
-| Expected Outcome 2 — generations to converge | 500 | 13.2 mean, 14 worst (10 seeds) | **PASS** |
-| Expected Outcome 1 — hard-constraint violations | 0 | 0 in 10/10 runs | **PASS** |
-
-Reproduce these numbers yourself with `npm run bench:nfr1`.
-
----
-
-## Quick start
-
-Requires **Node.js 20+** and **Docker** (for PostgreSQL).
+Requires **Node.js 20+**.
 
 ```bash
-git clone <repository-url> schedular
-cd schedular
-
-npm install              # install all workspaces
-npm run db:up            # start PostgreSQL 16 in Docker (port 5433)
-npm run setup            # generate Prisma client, migrate, build shared, seed data
-npm run dev              # start API (:4000) and client (:5173)
+npm install
+npm run dev      # open http://localhost:5173
+npm test         # 8 tests
 ```
 
-Open **http://localhost:5173**.
+## The problem
 
-| Account | Password | Role |
-|---|---|---|
-| `admin@academia.edu.np` | `admin123` | Administrator — full access |
-| `viewer@academia.edu.np` | `viewer123` | Viewer — read and export only |
+6 programmes, 30 courses, 20 teachers, 15 rooms and 12 batches (the NFR1 configuration).
+Every course has 3 lectures a week, so **180 sessions** have to be placed into **36 slots**
+(Sunday–Friday × 6 periods). The data lives in [`src/data.ts`](src/data.ts).
 
-To see it work end to end: sign in as the administrator, open **Generate**, press
-**Generate timetable**, and watch the convergence chart. Hard violations fall from ~106 to
-zero within about fifteen generations. Then open **Timetable**, pick a batch, and export.
+**Hard constraints** — must all be satisfied:
+- a teacher is never in two places at once
+- a room is never booked twice
+- a batch is never in two classes at once
+- a teacher only teaches courses they are qualified for *(by construction)*
+- a batch only goes in a room big enough for it *(by construction)*
 
----
+**Soft constraints** — optimised once the hard ones hold:
+- few idle gaps in a teacher's day
+- each batch's classes spread evenly across the week
 
-## Constraints
+## The algorithm
 
-**Hard** — a timetable violating any of these is unusable, and the system will not report
-success while one remains:
+[`src/ga/`](src/ga) has one file per step of the proposal (§4.3.2):
 
-- No teacher is in two places at once
-- No room is double-booked
-- No student batch is double-booked
-- No batch is placed in a room smaller than the batch
-- No laboratory session is placed in a lecture hall
-- No teacher is scheduled outside their declared availability
-- No teacher is assigned a subject they are not qualified for
-
-**Soft** — desirable, optimised after all hard constraints are satisfied:
-
-- Minimise teacher idle gaps between classes on the same day
-- Spread each batch's classes evenly across the week
-- Avoid the same subject in consecutive periods for a batch
-- Balance utilisation across rooms
-
----
-
-## Project layout
-
-```
-schedular/
-├── docker-compose.yml       PostgreSQL 16
-├── packages/shared/         Types, Zod schemas and GA constants used by BOTH tiers
-├── server/
-│   ├── prisma/              Schema, migrations, seed data
-│   └── src/
-│       ├── ga/              ← The Genetic Algorithm. Zero dependencies.
-│       ├── routes/          REST endpoints
-│       ├── services/        Run orchestration, data loading
-│       ├── middleware/      Auth, RBAC, validation, error handling
-│       └── export/          PDF and Excel generation
-├── client/src/
-│   ├── pages/               Login, dashboard, generate, timetable, analysis, 7 CRUD screens
-│   └── components/          Shell, AG-Grid timetable, shared resource page
-├── benchmarks/              Reproducible performance suite → CSV
-└── docs/                    UML, report, defense preparation, demo script
-```
-
-### The algorithm
-
-`server/src/ga/` contains one file per stage of the algorithm, mapped to the proposal:
-
-| File | Proposal step |
+| File | Step |
 |---|---|
-| `context.ts` | Step 1 — session expansion and encoding |
-| `population.ts` | Step 2 — population initialisation |
-| `fitness.ts` | Step 3 — fitness evaluation, `1 / (1 + penalty)` |
-| `selection.ts` | Step 4 — tournament selection, k = 5 |
-| `crossover.ts` | Step 5 — single-point crossover, rate 0.8 |
-| `mutation.ts` | Step 6 — mutation, rate 0.05 |
-| `engine.ts` | Step 7 — termination, and the evolutionary loop |
-| `repair.ts` | Documented refinement — targeted local search |
-| `feasibility.ts` | NFR4 — pre-flight impossibility detection |
-| `rng.ts` | Seedable PRNG, so every result is reproducible |
+| `problem.ts` | 1 — Encoding: one gene per session, gene = (teacher, room, slot) |
+| `population.ts` | 2 — 100 random timetables |
+| `fitness.ts` | 3 — `fitness = 1 / (1 + penalty)`; 100 per clash, small soft penalties |
+| `selection.ts` | 4 — Tournament selection, k = 5 |
+| `crossover.ts` | 5 — Single-point crossover, rate 0.8, top 20% kept as elites |
+| `mutation.ts` | 6 — Mutation, rate 0.05: new room, new slot, or both |
+| `engine.ts` | 7 — The loop and termination (max 1000 generations) |
+| `repair.ts` | Our addition: move clashing genes to a better spot if one exists |
+| `rng.ts` | Seeded random numbers, so every run is reproducible |
 
-No optimisation, solver or GA library is used anywhere. `package.json` can be inspected to
-confirm this.
+No GA or optimisation library is used. The only runtime dependencies are React and Recharts.
 
----
+## Results
 
-## Commands
+Across 10 seeds on the data above:
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Run API and client together |
-| `npm test` | Run the test suite (65 tests) |
-| `npm run seed` | Reset the database to the benchmark dataset |
-| `npm run ga:cli` | Run the algorithm from the terminal, no browser |
-| `npm run bench` | Full benchmark suite → `benchmarks/results/*.csv` |
-| `npm run bench:nfr1` | Just the NFR1 compliance benchmark |
-| `npm run build` | Production build of all workspaces |
-
-`npm run ga:cli` accepts the parameters directly:
-
-```bash
-npm run ga:cli -- --population 200 --mutation 0.01 --seed 7
-```
-
----
-
-## Technology
-
-| Layer | Choice | Why |
+| | Generations to clash-free | Time to clash-free |
 |---|---|---|
-| Frontend | React 18 + TypeScript | Type safety over the multi-dimensional timetable structures |
-| Grid | AG-Grid Community | Sorting, filtering and custom cell rendering (FR3) |
-| Charts | Recharts | Live convergence curve (FR4) |
-| Backend | Node.js 20 + Express | One language across the stack; `packages/shared` is imported by both tiers |
-| Database | PostgreSQL 16 + Prisma | Real foreign keys and data integrity (NFR3) |
-| Export | exceljs, pdfmake | Multi-sheet Excel and print-ready PDF (FR5) |
-| Tests | Vitest | Unit, integration and property-based tests |
+| With repair | 7.1 mean, 8 worst | 384 ms mean, 442 ms worst |
+| Plain GA (Steps 1–7 only) | 378.8 mean, 572 worst; 2/10 miss the 500-generation target | — |
 
----
+The proposal's budgets were 500 generations and 120 seconds.
 
-## Documentation
-
-- [`docs/REPORT.md`](docs/REPORT.md) — the full project report in CACS452 chapter order
-- [`docs/UML.md`](docs/UML.md) — use case, class, ER, sequence, activity and component diagrams
-- [`docs/DEFENSE.md`](docs/DEFENSE.md) — anticipated examiner questions with prepared answers
-- [`docs/DEMO.md`](docs/DEMO.md) — the exact click path for the live demonstration
-- [`PLAN.md`](PLAN.md) — the build plan this project was executed against
+Fitness ends near 0.1, not 1.0, because a real timetable always keeps a few soft penalties
+(a teacher with one free hour). Zero hard violations is the goal; the run stops once it has
+that and the soft score has stopped improving for 20 generations.

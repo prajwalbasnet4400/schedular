@@ -8,479 +8,196 @@ exported to PNG for the printed report.
 
 ## 1. Use Case Diagram
 
-Two actors, matching the role split of FR6. The administrator has every viewer capability
-plus the ability to modify data and run the algorithm.
+One actor. There is no login, so anyone who opens the page can generate and view.
 
 ```mermaid
 flowchart LR
-  Admin(["Administrator"])
-  Viewer(["Viewer<br/>(Department Head)"])
+  User(["User<br/>(Administrator)"])
 
   subgraph System["Automated College Timetable Generator"]
-    UC1["Sign in"]
-    UC2["Manage departments,<br/>programmes and courses"]
-    UC3["Manage instructors<br/>(expertise + availability)"]
-    UC4["Manage rooms,<br/>batches and time slots"]
-    UC5["Validate data feasibility"]
-    UC6["Generate timetable"]
-    UC7["Monitor generation progress"]
-    UC8["View timetable<br/>(batch / teacher / room)"]
-    UC9["Filter timetable"]
-    UC10["Export to PDF / Excel"]
-    UC11["Review run history<br/>and performance"]
+    UC1["Generate timetable"]
+    UC2["Watch generation progress"]
+    UC3["View timetable"]
+    UC4["By batch"]
+    UC5["By teacher"]
+    UC6["By room"]
   end
 
-  Admin --- UC1
-  Admin --- UC2
-  Admin --- UC3
-  Admin --- UC4
-  Admin --- UC5
-  Admin --- UC6
-  Admin --- UC7
-  Admin --- UC8
-  Admin --- UC10
-  Admin --- UC11
+  User --- UC1
+  User --- UC3
 
-  Viewer --- UC1
-  Viewer --- UC8
-  Viewer --- UC10
-  Viewer --- UC11
-
-  UC6 -.->|"&laquo;include&raquo;"| UC5
-  UC6 -.->|"&laquo;include&raquo;"| UC7
-  UC8 -.->|"&laquo;extend&raquo;"| UC9
+  UC1 -.->|"&laquo;include&raquo;"| UC2
+  UC4 -.->|"&laquo;extend&raquo;"| UC3
+  UC5 -.->|"&laquo;extend&raquo;"| UC3
+  UC6 -.->|"&laquo;extend&raquo;"| UC3
 ```
 
 ---
 
-## 2. Class Diagram
+## 2. Activity Diagram: The Genetic Algorithm
 
-The domain entities of proposal section 4.3.4, together with the algorithm classes. Note
-that `FitnessEvaluator`, `GeneticAlgorithm` and the operator modules depend only on
-`ProblemContext` -- they never touch Prisma, which is what makes them unit-testable without
-a database.
+The seven steps of proposal section 4.3.2, with our one addition (targeted repair) marked.
+
+```mermaid
+flowchart TD
+  Start([Start]) --> Load["Load fixed data<br/>(src/data.ts)"]
+  Load --> Expand["Step 1: Build problem<br/>one gene per session (180),<br/>qualified teachers + rooms that fit"]
+  Expand --> Valid{"Every course has a teacher<br/>and every batch fits a room?"}
+  Valid -->|No| Error["Throw error naming the course / batch"] --> Stop([Stop])
+  Valid -->|Yes| Init["Step 2: Random population<br/>N = 100"]
+  Init --> Eval["Step 3: Evaluate fitness<br/>f = 1 / (1 + penalty)"]
+  Eval --> Rank["Rank by fitness,<br/>report progress to chart"]
+  Rank --> Done{"Fitness = 1.0, or<br/>clash-free and no improvement<br/>for 20 generations, or<br/>generation = 1000?"}
+  Done -->|Yes| Show["Show best timetable"] --> Stop
+  Done -->|No| Elite["Keep top 20% unchanged (elitism)"]
+  Elite --> Select["Step 4: Tournament selection, k = 5"]
+  Select --> Cross["Step 5: Single-point crossover, rate 0.8<br/>(else copy one parent)"]
+  Cross --> Mutate["Step 6: Mutation, per-gene rate 0.05<br/>(new room, slot or both)"]
+  Mutate --> Repair["Addition: targeted repair<br/>up to 12 clashing genes, 8 tries each,<br/>keep only if penalty falls"]
+  Repair --> Full{"Population full?"}
+  Full -->|No| Select
+  Full -->|Yes| Eval
+```
+
+---
+
+## 3. Class / Module Diagram: `src/ga`
+
+Each proposal step is one module. The modules are plain functions over plain data; only
+`Rng` is a class. Nothing in `src/ga` depends on React, so the tests run it directly.
 
 ```mermaid
 classDiagram
-  class Department {
-    +String id
-    +String code
-    +String name
+  class CollegeData {
+    +Course[] courses
+    +Teacher[] teachers
+    +Room[] rooms
+    +Batch[] batches
   }
-  class Program {
-    +String id
-    +String code
-    +String name
-    +int totalSemesters
+  class Problem {
+    +CollegeData data
+    +Session[] sessions
   }
-  class Course {
-    +String id
-    +String code
-    +String name
-    +int creditHours
-    +int lecturesPerWeek
-    +int labsPerWeek
-    +CourseType type
-  }
-  class Instructor {
-    +String id
-    +String name
-    +String email
-  }
-  class Room {
-    +String id
-    +String number
-    +int capacity
-    +RoomType type
-  }
-  class Batch {
-    +String id
-    +int semester
-    +String section
-    +int studentCount
-  }
-  class MeetingTime {
-    +String id
-    +Day day
-    +int period
-    +String startTime
-    +String endTime
-  }
-  class InstructorAvailability {
-    +boolean isAvailable
-  }
-  class ScheduleRun {
-    +String id
-    +RunStatus status
-    +GAConfig config
-    +float bestFitness
-    +int generationsRun
-    +int durationMs
-  }
-  class ScheduleAssignment {
-    +String id
-    +SessionType sessionType
-    +String sessionGroupId
-  }
-
-  Department "1" --> "*" Course
-  Department "1" --> "*" Instructor
-  Department "1" --> "*" Program
-  Program "1" --> "*" Batch
-  Instructor "*" -- "*" Course : qualified for
-  Batch "*" -- "*" Course : enrolled in
-  Instructor "1" --> "*" InstructorAvailability
-  MeetingTime "1" --> "*" InstructorAvailability
-  ScheduleRun "1" --> "*" ScheduleAssignment
-  ScheduleAssignment --> Course
-  ScheduleAssignment --> Instructor
-  ScheduleAssignment --> Room
-  ScheduleAssignment --> MeetingTime
-  ScheduleAssignment --> Batch
-
-  class ProblemContext {
-    +SessionRequirement[] requirements
-    +Uint8Array availability
-    +Uint8Array qualification
-    +isAvailable(i, slot) boolean
-    +isQualified(i, course) boolean
-  }
-  class SessionRequirement {
-    +int courseIndex
-    +int batchIndex
-    +SessionType sessionType
-    +int duration
-    +int[] eligibleInstructors
-    +int[] eligibleRooms
-    +int[] eligibleStartSlots
+  class Session {
+    +int course
+    +int batch
+    +int[] teachers
+    +int[] rooms
   }
   class Gene {
-    +int instructorIndex
-    +int roomIndex
-    +int startSlot
+    +int teacher
+    +int room
+    +int slot
   }
-  class FitnessEvaluator {
-    +evaluate(chromosome) FitnessBreakdown
-    +conflictedGenes int[]
+  class Evaluation {
+    +float fitness
+    +float penalty
+    +int hardViolations
+    +float softPenalty
+    +int[] conflicted
   }
-  class GeneticAlgorithm {
-    -GAConfig config
-    -Rng rng
-    +run() GAResult
-    +runAsync() Promise~GAResult~
+  class Individual {
+    +Gene[] chromosome
+    +float fitness
+    +int hardViolations
+  }
+  class Result {
+    +Gene[] best
+    +float fitness
+    +int hardViolations
+    +float softPenalty
+    +int generations
+    +int solvedAt
+    +float elapsedMs
   }
   class Rng {
     -int state
     +next() float
+    +int(max) int
+    +chance(p) boolean
+    +pick(items) T
   }
 
-  ProblemContext "1" --> "*" SessionRequirement
-  GeneticAlgorithm --> ProblemContext
-  GeneticAlgorithm --> FitnessEvaluator
-  GeneticAlgorithm --> Rng
-  FitnessEvaluator --> ProblemContext
-  GeneticAlgorithm ..> Gene : evolves arrays of
+  class problem_ts {
+    <<module>>
+    +SLOTS = 36
+    +buildProblem(data) Problem
+  }
+  class population_ts {
+    <<module>>
+    +randomChromosome(problem, rng) Gene[]
+    +clone(chromosome) Gene[]
+  }
+  class fitness_ts {
+    <<module>>
+    +HARD_PENALTY = 100
+    +evaluate(problem, chromosome) Evaluation
+  }
+  class selection_ts {
+    <<module>>
+    +tournament(population, k, rng) Individual
+  }
+  class crossover_ts {
+    <<module>>
+    +crossover(a, b, rng) Gene[]
+  }
+  class mutation_ts {
+    <<module>>
+    +mutate(chromosome, problem, rate, rng) void
+  }
+  class repair_ts {
+    <<module>>
+    +repair(chromosome, problem, rng) Evaluation
+  }
+  class engine_ts {
+    <<module>>
+    +CONFIG
+    +runGA(problem, onProgress, seed) Promise~Result~
+  }
+
+  Problem "1" --> "1" CollegeData
+  Problem "1" --> "*" Session
+  Individual "1" --> "*" Gene
+  problem_ts ..> Problem : builds
+  population_ts ..> Gene : creates
+  fitness_ts ..> Evaluation : returns
+  repair_ts ..> fitness_ts : uses
+  engine_ts ..> population_ts
+  engine_ts ..> fitness_ts
+  engine_ts ..> selection_ts
+  engine_ts ..> crossover_ts
+  engine_ts ..> mutation_ts
+  engine_ts ..> repair_ts
+  engine_ts ..> Rng
+  engine_ts ..> Result : returns
 ```
 
 ---
 
-## 3. Entity Relationship Diagram
+## 4. Component Diagram
 
-The PostgreSQL schema. Every relationship shown is enforced by a real foreign key, as NFR3
-requires.
-
-```mermaid
-erDiagram
-  USER ||--o{ SCHEDULE_RUN : "starts"
-  DEPARTMENT ||--o{ COURSE : "offers"
-  DEPARTMENT ||--o{ INSTRUCTOR : "employs"
-  DEPARTMENT ||--o{ PROGRAM : "administers"
-  PROGRAM ||--o{ BATCH : "enrols"
-  COURSE }o--o{ INSTRUCTOR : "qualified to teach"
-  COURSE }o--o{ BATCH : "studied by"
-  INSTRUCTOR ||--o{ INSTRUCTOR_AVAILABILITY : "declares"
-  MEETING_TIME ||--o{ INSTRUCTOR_AVAILABILITY : "covered by"
-  SCHEDULE_RUN ||--o{ SCHEDULE_ASSIGNMENT : "produces"
-  COURSE ||--o{ SCHEDULE_ASSIGNMENT : "scheduled as"
-  INSTRUCTOR ||--o{ SCHEDULE_ASSIGNMENT : "teaches"
-  ROOM ||--o{ SCHEDULE_ASSIGNMENT : "hosts"
-  MEETING_TIME ||--o{ SCHEDULE_ASSIGNMENT : "occupies"
-  BATCH ||--o{ SCHEDULE_ASSIGNMENT : "attends"
-
-  USER {
-    string id PK
-    string name
-    string email UK
-    string passwordHash
-    enum role
-  }
-  DEPARTMENT {
-    string id PK
-    string code UK
-    string name
-  }
-  PROGRAM {
-    string id PK
-    string code UK
-    string name
-    int totalSemesters
-    string departmentId FK
-  }
-  COURSE {
-    string id PK
-    string code UK
-    string name
-    int creditHours
-    int lecturesPerWeek
-    int labsPerWeek
-    enum type
-    string departmentId FK
-  }
-  INSTRUCTOR {
-    string id PK
-    string name
-    string email UK
-    string departmentId FK
-  }
-  ROOM {
-    string id PK
-    string number UK
-    string building
-    int capacity
-    enum type
-  }
-  BATCH {
-    string id PK
-    string programId FK
-    int semester
-    string section
-    int studentCount
-  }
-  MEETING_TIME {
-    string id PK
-    enum day
-    int period
-    string startTime
-    string endTime
-  }
-  INSTRUCTOR_AVAILABILITY {
-    string instructorId PK_FK
-    string meetingTimeId PK_FK
-    bool isAvailable
-  }
-  SCHEDULE_RUN {
-    string id PK
-    enum status
-    json config
-    float bestFitness
-    int generationsRun
-    int durationMs
-    int hardViolations
-    int softViolations
-    json breakdown
-    json convergence
-    string createdById FK
-  }
-  SCHEDULE_ASSIGNMENT {
-    string id PK
-    string runId FK
-    string courseId FK
-    string instructorId FK
-    string roomId FK
-    string meetingTimeId FK
-    string batchId FK
-    enum sessionType
-    string sessionGroupId
-  }
-```
-
----
-
-## 4. Sequence Diagram: Timetable Generation
-
-Shows why the generation endpoint returns `202 Accepted` immediately rather than blocking:
-the browser must be able to open the progress stream and watch the run it just started.
-
-```mermaid
-sequenceDiagram
-  actor Admin
-  participant UI as React Client
-  participant API as Express API
-  participant SVC as ScheduleService
-  participant GA as GeneticAlgorithm
-  participant DB as PostgreSQL
-
-  Admin->>UI: Click "Generate timetable"
-  UI->>API: POST /api/schedule/generate
-  API->>API: requireAuth + requireRole(ADMIN)
-  API->>SVC: startRun(userId, config)
-  SVC->>DB: load courses, instructors, rooms,<br/>batches, meeting times
-  DB-->>SVC: institutional data
-  SVC->>SVC: build ProblemContext (index all entities)
-  SVC->>SVC: analyseFeasibility()
-
-  alt Input is infeasible (NFR4)
-    SVC->>DB: record run as INFEASIBLE
-    SVC-->>API: throw with reasons
-    API-->>UI: 422 + specific problems
-    UI-->>Admin: "No laboratory can seat batch BBA Sem 5A"
-  else Input is feasible
-    SVC->>DB: create ScheduleRun (RUNNING)
-    SVC-->>API: runId
-    API-->>UI: 202 Accepted { runId }
-    UI->>API: GET /runs/:id/stream (EventSource)
-
-    SVC->>GA: runAsync()
-    loop Until conflict-free or 1000 generations
-      GA->>GA: Step 3 evaluate fitness
-      GA->>GA: Step 4 tournament selection
-      GA->>GA: Step 5 single-point crossover
-      GA->>GA: Step 6 mutation + targeted repair
-      GA-->>SVC: GenerationProgress
-      SVC-->>UI: SSE progress event
-      UI-->>Admin: chart advances live
-      GA->>GA: yield to event loop
-    end
-
-    GA-->>SVC: GAResult (best chromosome)
-    SVC->>SVC: decodeChromosome()
-    SVC->>DB: save assignments + convergence + breakdown
-    SVC-->>UI: SSE completed event
-    UI-->>Admin: "Conflict-free timetable found at generation 13"
-  end
-```
-
----
-
-## 5. Activity Diagram: The Genetic Algorithm
-
-The seven steps of proposal section 4.3.2, with the two documented refinements marked.
-
-```mermaid
-flowchart TD
-  Start([Start]) --> Load[Load institutional data]
-  Load --> Expand["Step 1: Session expansion<br/>one gene per required session"]
-  Expand --> Feas{"Feasible?<br/>(NFR4 pre-flight)"}
-  Feas -->|No| Report[Report specific problems] --> Stop([Stop])
-  Feas -->|Yes| Init["Step 2: Initialise population<br/>N = 100 random chromosomes"]
-  Init --> Eval["Step 3: Evaluate fitness<br/>f = 1 / (1 + total_penalty)"]
-  Eval --> Check{"Zero hard violations<br/>and soft converged?"}
-  Check -->|Yes| Decode
-  Eval --> GenCheck{"Generation = 1000?"}
-  GenCheck -->|Yes| Decode["Decode best chromosome"]
-  GenCheck -->|No| Elite["Carry forward top 20% (elitism)"]
-  Elite --> Stagnant{"Stagnant for<br/>50 generations?"}
-  Stagnant -->|Yes| Immigrants["Refinement: inject random immigrants<br/>+ raise mutation rate"]
-  Stagnant -->|No| Select
-  Immigrants --> Select["Step 4: Tournament selection, k = 5"]
-  Select --> Cross["Step 5: Single-point crossover, rate 0.8"]
-  Cross --> Mutate["Step 6: Mutation, per-gene rate 0.05"]
-  Mutate --> Repair["Refinement: targeted repair<br/>of conflicted genes"]
-  Repair --> Eval
-  Decode --> Persist[Save assignments to database] --> Render[Render in grid / export] --> Stop
-```
-
----
-
-## 6. Component and Deployment Diagram
-
-The three-tier architecture of proposal section 4.3.1.
+Everything runs in the browser. There is no server and no database.
 
 ```mermaid
 flowchart TB
-  subgraph Browser["Client tier — Browser"]
-    React["React 18 + TypeScript"]
-    AgGrid["AG-Grid Community<br/>(timetable grid, FR3)"]
-    Recharts["Recharts<br/>(convergence chart, FR4)"]
-    React --- AgGrid
-    React --- Recharts
-  end
-
-  subgraph Server["Application tier — Node.js 20"]
-    Express["Express REST API"]
-    Auth["JWT auth + RBAC<br/>(FR6)"]
-    Validate["Zod validation<br/>(shared with client)"]
-    subgraph Engine["Genetic Algorithm engine — zero dependencies"]
-      Context["ProblemContext"]
-      Fitness["FitnessEvaluator"]
-      Ops["selection / crossover<br/>mutation / repair"]
-      Loop["GeneticAlgorithm"]
+  subgraph Browser["Browser (served by Vite in development)"]
+    subgraph UI["React 18 + TypeScript"]
+      App["App.tsx<br/>Generate button, stat tiles"]
+      Chart["Recharts line chart<br/>(hard violations, best fitness)"]
+      Grid["Timetable.tsx<br/>HTML table by batch / teacher / room"]
     end
-    Export["Export module<br/>exceljs + pdfmake (FR5)"]
-    Express --- Auth
-    Express --- Validate
-    Express --- Engine
-    Express --- Export
+    subgraph Engine["src/ga (no dependencies)"]
+      Run["engine.ts runGA()"]
+      Ops["problem / population / fitness<br/>selection / crossover / mutation / repair"]
+      Rng["rng.ts (seed 42)"]
+    end
+    Data["data.ts<br/>fixed college data"]
   end
 
-  subgraph Data["Data tier"]
-    Postgres[("PostgreSQL 16")]
-  end
-
-  subgraph SharedPkg["@schedular/shared"]
-    Types["Entity types, Zod schemas,<br/>GA constants"]
-  end
-
-  Browser -->|"REST over HTTP"| Express
-  Browser -->|"Server-Sent Events"| Express
-  Express -->|"Prisma ORM"| Postgres
-  Types -.->|imported by| Browser
-  Types -.->|imported by| Server
-```
-
----
-
-## 7. State Diagram: Lifecycle of a Schedule Run
-
-A `ScheduleRun` row is the system's unit of work. Its states are persisted, so a run's
-outcome — including the reason an infeasible dataset was rejected — survives a page reload
-or a server restart.
-
-```mermaid
-stateDiagram-v2
-  [*] --> Draft: Administrator opens Generate screen
-  Draft --> Validating: Submit parameters
-  Validating --> Infeasible: analyseFeasibility() fails (NFR4)
-  Infeasible --> [*]: Reasons reported, no search run
-  Validating --> Running: Necessary conditions hold
-  Running --> Running: Generation completed<br/>(progress streamed over SSE)
-  Running --> ConflictFree: Zero hard violations reached
-  ConflictFree --> ConflictFree: Soft polishing continues
-  ConflictFree --> Completed: Soft score stops improving
-  Running --> Exhausted: Generation ceiling reached<br/>with violations remaining
-  Running --> Failed: Server or database error
-  Completed --> [*]: Assignments persisted, exportable
-  Exhausted --> [*]: Best-effort result retained for analysis
-  Failed --> [*]
-```
-
----
-
-## 8. Object Diagram: A Snapshot During Generation
-
-One instant of a benchmark run — generation 13, the moment the first conflict-free
-chromosome appears. It shows concrete instances rather than classes, which is what makes
-the encoding of §4.3 of the report tangible: gene 47 holds only the three free variables,
-while the course, batch and session type are read from requirement 47.
-
-```mermaid
-flowchart TB
-  ctx["ctx : ProblemContext<br/>requirements = 204<br/>periods = 228<br/>meetingTimes = 36"]
-  req["req47 : SessionRequirement<br/>courseId = CSC318<br/>batchId = BSCCSIT-5A<br/>sessionType = LAB<br/>duration = 2"]
-  ind["best : Individual<br/>fitness = 0.030864<br/>hardViolations = 0<br/>softViolations = 144"]
-  chrom["chromosome : Gene[204]"]
-  gene["gene47 : Gene<br/>instructorId = INS-07<br/>roomId = LAB-02<br/>startSlot = 21"]
-  ins["ins07 : Instructor<br/>name = R. Shrestha<br/>expertise = {CSC318, CSC322}"]
-  room["lab02 : Room<br/>capacity = 60<br/>type = LABORATORY"]
-  mt["mt21 : MeetingTime<br/>day = WED<br/>period = 3"]
-  run["run : ScheduleRun<br/>status = RUNNING<br/>seed = 89<br/>generation = 13"]
-
-  ctx --> req
-  run --> ind
-  ind --> chrom
-  chrom -->|"index 47"| gene
-  gene -.->|"describes"| req
-  gene --> ins
-  gene --> room
-  gene --> mt
+  App -->|"buildProblem(COLLEGE)"| Data
+  App -->|"runGA(problem, onProgress)"| Run
+  Run -->|"progress each generation"| Chart
+  Run -->|"best chromosome"| Grid
+  Run --- Ops
+  Run --- Rng
 ```
