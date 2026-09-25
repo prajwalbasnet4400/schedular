@@ -624,7 +624,7 @@ carries a one-line explanation.
 
 <div align="center">
 
-«Figure 5.1 — Screenshot of the application after a run: stat tiles, chart and timetable grid»
+<img src="screenshots/03-after-run.png" alt="The application after a run" width="600">
 
 **Figure 5.1: The Application After a Run**
 
@@ -714,7 +714,7 @@ generation 38** (about 0.3–0.4 s). Fitness jumps when the last clash goes (Fig
 
 <div align="center">
 
-«Figure 5.2 — Screenshot of the live chart for seed 42: hard violations and best fitness against generation»
+<img src="screenshots/04-convergence-chart.png" alt="Convergence chart for seed 42" width="600">
 
 **Figure 5.2: Convergence of Hard Violations and Best Fitness**
 
@@ -789,8 +789,8 @@ parallel algorithms," *Management Science*, vol. 37, no. 1, pp. 98–113, 1991.
 
 | | |
 |---|---|
-| «Screenshot 1» | The page before a run — dataset summary, parameter fields and *Generate timetable* button |
-| «Screenshot 2» | Timetable, teacher view |
+| ![Before a run](screenshots/01-before-run.png) | The page before a run — dataset summary, parameter fields and *Generate timetable* button |
+| ![Teacher view](screenshots/06-timetable-teacher.png) | Timetable, teacher view |
 
 ## Appendix B — Running the System
 

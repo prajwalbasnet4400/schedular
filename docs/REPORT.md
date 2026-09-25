@@ -386,8 +386,7 @@ editor each have a short note on what they show. The source files are commented 
 way: each `src/ga/` file opens with what its step does and why, with worked examples (e.g. a
 penalty of 100.6 giving fitness 0.0098 in `fitness.ts`).
 
-«Screenshot: the single page after a finished run — stat tiles, convergence chart and
-timetable grid.»
+![The single page after a finished run — stat tiles, convergence chart and timetable grid](screenshots/03-after-run.png)
 
 ---
 
@@ -456,7 +455,7 @@ each clash removed is worth 100 penalty units, so fitness jumps sharply when the
 goes. After that the curve climbs more slowly as soft penalties are removed, each worth a
 fraction of a unit, until none remain and fitness reaches 1.0.
 
-«Screenshot: the live chart of hard violations and best fitness for seed 42.»
+![The live chart of hard violations and best fitness for seed 42](screenshots/04-convergence-chart.png)
 
 ### 7.3 Effect of targeted repair
 
