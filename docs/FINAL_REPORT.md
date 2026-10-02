@@ -13,7 +13,7 @@
 «College logo»
 
 # Tribhuvan University
-## Institute of Science and Technology
+## Faculty of Humanities and Social Sciences
 
 ### Final Project Report
 #### On
@@ -26,17 +26,17 @@ Academia International College
 Gwarko, Lalitpur
 
 *In partial fulfilment of the requirements for the*
-*Bachelor of Science in Computer Science and Information Technology*
+*Bachelor in Computer Application*
 *(CACS452 — Project III, Seventh Semester)*
 
 **Submitted by**
-Prajwal Basnet («symbol number»)
-Shekhar Paudel («symbol number»)
+Prajwal Basnet (6-2-346-22-2021)
+Shekhar Paudel (6-2-346-30-2021)
 
 «Month, Year»
 
 **Under the Supervision of**
-«Supervisor Name»
+Mausam Pokhrel
 
 </div>
 
@@ -47,7 +47,7 @@ Shekhar Paudel («symbol number»)
 «College logo»
 
 # Tribhuvan University
-## Institute of Science and Technology
+## Faculty of Humanities and Social Sciences
 ## Academia International College
 
 # SUPERVISOR'S RECOMMENDATION
@@ -56,8 +56,7 @@ Shekhar Paudel («symbol number»)
 
 I hereby recommend that this project prepared under my supervision by **Prajwal Basnet** and
 **Shekhar Paudel** entitled **"Automated College Timetable Generator"** in partial fulfilment
-of the requirements for the degree of Bachelor of Science in Computer Science and Information
-Technology be processed for evaluation.
+of the requirements for the degree of Bachelor in Computer Application be processed for evaluation.
 
 <br><br>
 
@@ -65,7 +64,7 @@ Technology be processed for evaluation.
 
 **SIGNATURE**
 
-«Supervisor Name»
+Mausam Pokhrel
 Supervisor
 Department of Computer Application
 Academia International College, Gwarko, Lalitpur
@@ -77,7 +76,7 @@ Academia International College, Gwarko, Lalitpur
 «College logo»
 
 # Tribhuvan University
-## Institute of Science and Technology
+## Faculty of Humanities and Social Sciences
 ## Academia International College
 
 # LETTER OF APPROVAL
@@ -86,22 +85,21 @@ Academia International College, Gwarko, Lalitpur
 
 This is to certify that this project prepared by **Prajwal Basnet** and **Shekhar Paudel**
 entitled **"Automated College Timetable Generator"** in partial fulfilment of the
-requirements for the degree of Bachelor of Science in Computer Science and Information
-Technology has been evaluated. In our opinion it is satisfactory in scope and quality as a
+requirements for the degree of Bachelor in Computer Application has been evaluated. In our opinion it is satisfactory in scope and quality as a
 project for the required degree.
 
 <br>
 
 | | |
 |---|---|
-| SIGNATURE of Supervisor<br>…………………………<br>«Supervisor Name»<br>Academia International College<br>Gwarko, Lalitpur | SIGNATURE of Coordinator<br>…………………………<br>«Coordinator Name»<br>Co-ordinator<br>Academia International College<br>Gwarko, Lalitpur |
+| SIGNATURE of Supervisor<br>…………………………<br>Mausam Pokhrel<br>Academia International College<br>Gwarko, Lalitpur | SIGNATURE of Coordinator<br>…………………………<br>«Coordinator Name»<br>Co-ordinator<br>Academia International College<br>Gwarko, Lalitpur |
 | SIGNATURE of Internal Examiner<br>…………………………<br>Internal Examiner | SIGNATURE of External Examiner<br>…………………………<br>External Examiner |
 
 ---
 
 # ACKNOWLEDGEMENT
 
-We extend our heartfelt gratitude to «Supervisor Name», our supervisor at Academia
+We extend our heartfelt gratitude to Mausam Pokhrel, our supervisor at Academia
 International College, for the guidance, patience and technical scrutiny that shaped this
 project. The insistence that every performance claim be measured rather than asserted is the
 reason Chapter 5 reports seeded, reproducible measurements instead of an estimate.
@@ -117,8 +115,8 @@ for their feedback during the increment reviews.
 
 Yours sincerely,
 
-**Prajwal Basnet** («symbol number»)
-**Shekhar Paudel** («symbol number»)
+**Prajwal Basnet** (6-2-346-22-2021)
+**Shekhar Paudel** (6-2-346-30-2021)
 
 ---
 
@@ -196,6 +194,7 @@ Memetic Algorithm, TypeScript.
 
 | | |
 |---|---|
+| **BCA** | Bachelor in Computer Application |
 | **CSIT** | Computer Science and Information Technology |
 | **FR** | Functional Requirement |
 | **GA** | Genetic Algorithm |
@@ -295,7 +294,7 @@ Chapters 2–6 cover literature, analysis, design, implementation and testing, a
 ## 2.1 Background Study
 
 Candidate schedules grow exponentially with the sessions, and Even and Itai proved timetabling
-NP-hard [1]. Manual methods persist in Nepali colleges because commercial software is costly.
+NP-hard [1].
 
 **Terminologies related to this project:**
 
@@ -318,10 +317,9 @@ highly constrained school timetabling, especially with local search [4], as Sect
 confirms. Abramson used simulated annealing, showing metaheuristics viable where exact methods
 are not, but sensitive to parameters [5].
 
-**Existing systems.** *FET* is an open-source heuristic scheduler with a large constraint
-vocabulary, but a desktop application with a dense interface. *aSc TimeTables* is a mature
-commercial product, but costly for a Nepali college and school-oriented. *UniTime* is a capable
-open-source university system whose deployment burden presumes a much larger institution.
+**Existing systems.** *FET* is an open-source desktop scheduler with a dense interface;
+*aSc TimeTables* is commercial, costly and school-oriented; *UniTime* is an open-source
+university system whose deployment presumes a much larger institution.
 
 **The gap addressed.** These tools are heavy or costly and hide the algorithm; this project
 writes a small engine from scratch, shows its convergence live, and measures it.
@@ -606,7 +604,8 @@ search is a **memetic algorithm**.
 
 ### 5.1.1 Tools Used
 
-The tools are those of Table 3.5: **React**, **TypeScript**, **Vite**, **Recharts** and **Vitest**. The genetic algorithm itself uses none of them.
+The tools are those of Table 3.5: **React**, **TypeScript**, **Vite**, **Recharts** and **Vitest**. The genetic algorithm itself uses none of them. The system is started with `npm install` and
+`npm run dev`; `npm test` runs the ten tests.
 
 ### 5.1.2 Implementation of Modules
 
@@ -780,19 +779,3 @@ Dortmund, Germany, pp. 55–59, 1990.
 
 [5] D. Abramson, "Constructing school timetables using simulated annealing: Sequential and
 parallel algorithms," *Management Science*, vol. 37, no. 1, pp. 98–113, 1991.
-
----
-
-# APPENDIX
-
-## Appendix A — Screenshots
-
-| | |
-|---|---|
-| ![Before a run](screenshots/01-before-run.png) | The page before a run — dataset summary, parameter fields and *Generate timetable* button |
-| ![Teacher view](screenshots/06-timetable-teacher.png) | Timetable, teacher view |
-
-## Appendix B — Running the System
-
-Run `npm install`, then `npm run dev` and press *Generate timetable*; `npm test` runs the ten
-tests. The default seed of 42 gives the same timetable every time.

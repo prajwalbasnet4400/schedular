@@ -5,7 +5,7 @@ International College, in partial fulfilment of the requirements for the Bachelo
 Computer Application**
 
 **Course:** CACS452 — Project III
-**Programme:** B.Sc. Computer Science and Information Technology, Tribhuvan University
+**Programme:** Bachelor in Computer Application (BCA), Tribhuvan University
 **Submitted by:** Prajwal Basnet, Shekhar Paudel
 
 ---

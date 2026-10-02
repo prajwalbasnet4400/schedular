@@ -4,7 +4,7 @@ A Genetic Algorithm, written from scratch in TypeScript, that builds a clash-fre
 college timetable. It runs entirely in the browser: press **Generate** and watch it converge.
 
 **Final year project — CACS452, Project III**
-B.Sc. Computer Science and Information Technology, Tribhuvan University
+Bachelor in Computer Application (BCA), Tribhuvan University
 Academia International College, Department of Computer Application
 
 **Prajwal Basnet · Shekhar Paudel**
