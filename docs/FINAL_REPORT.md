@@ -27,7 +27,7 @@ Gwarko, Lalitpur
 
 *In partial fulfilment of the requirements for the*
 *Bachelor in Computer Application*
-*(CACS452 — Project III, Seventh Semester)*
+*(CACS452 — Project III, Eighth Semester)*
 
 **Submitted by**
 Prajwal Basnet (6-2-346-22-2021)

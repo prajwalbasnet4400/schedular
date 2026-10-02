@@ -1,0 +1,29 @@
+sequenceDiagram
+  actor U as User
+  participant A as App.tsx
+  participant P as problem.ts
+  participant E as engine.ts (runGA)
+  participant G as GA operators
+  participant C as Live chart
+  participant T as Timetable.tsx
+
+  U->>A: Edit data / parameters (optional)
+  A->>P: buildProblem(data)
+  alt data is invalid
+    P-->>A: Error (e.g. "No teacher can teach X")
+    A-->>U: Show message, disable Generate
+  else data is valid
+    P-->>A: Problem (48 sessions)
+    U->>A: Click "Generate timetable"
+    A->>E: runGA(problem, onProgress, config)
+    E->>G: randomChromosome() × 100
+    loop each generation, until a stopping rule holds
+      E->>G: evaluate · tournament · crossover · mutate · repair
+      G-->>E: next population
+      E-->>A: onProgress(generation, best fitness, violations)
+      A->>C: add point and redraw
+    end
+    E-->>A: Result (best chromosome, fitness, solvedAt, time)
+    A->>T: render best chromosome
+    T-->>U: Grid by batch / teacher / room
+  end
